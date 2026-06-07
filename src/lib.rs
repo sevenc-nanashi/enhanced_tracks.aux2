@@ -92,7 +92,7 @@ pub struct KeyframeBinding {
 impl KeyframeTrackParams {
     pub fn parse(alias: &str) -> Option<Self> {
         static KEYFRAME_PATTERN: lazy_regex::Lazy<lazy_regex::regex::Regex> = lazy_regex::lazy_regex!(
-            r",keyframes\.aux2,\d+\|(?<bank_id>\d+),(?<keyframes_id>\d+),(?<scene_id>\d+),(?<project_session_nonce>\d+)(?:$|\|)"
+            r",enhanced_tracks\.aux2,\d+\|(?<bank_id>\d+),(?<keyframes_id>\d+),(?<scene_id>\d+),(?<project_session_nonce>\d+)(?:$|\|)"
         );
         let captures = KEYFRAME_PATTERN.captures(alias)?;
         let bank_id: usize = captures.name("bank_id")?.as_str().parse().ok()?;
