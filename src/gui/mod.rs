@@ -8,6 +8,7 @@ mod timecontrol;
 pub struct KeyframesGui {
     pub selected_object_info: Option<SelectedObjectInfo>,
     pub timecontrol_editor: Option<TimeControlEditorTarget>,
+    pub timecontrol_clipboard: Option<crate::keyframe::TimeControl>,
     pub debug_counter: usize,
 }
 
@@ -243,6 +244,7 @@ pub fn create_gui(
     Ok(Box::new(KeyframesGui {
         selected_object_info: None,
         timecontrol_editor: None,
+        timecontrol_clipboard: None,
         debug_counter: 0,
     }))
 }

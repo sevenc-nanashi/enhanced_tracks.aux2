@@ -6,6 +6,7 @@ impl KeyframesGui {
         timecontrol: &mut crate::keyframe::TimeControl,
         selected_point: &mut usize,
         context_menu_position: &mut Option<[f64; 2]>,
+        clipboard: &mut Option<crate::keyframe::TimeControl>,
         visible_y_bounds: &mut Option<TimeControlVerticalBounds>,
         drag_scroll_y_bounds: &mut Option<TimeControlVerticalBounds>,
     ) -> (bool, bool) {
@@ -100,6 +101,25 @@ impl KeyframesGui {
                 changed = true;
                 commit_requested = true;
             }
+            if ui.button("コピー").clicked() {
+                *clipboard = Some(timecontrol.clone());
+                ui.close();
+            }
+            let can_paste = clipboard.is_some();
+            ui.add_enabled_ui(can_paste, |ui| {
+                if ui.button("貼り付け").clicked() {
+                    if let Some(copied) = clipboard.clone() {
+                        *timecontrol = copied;
+                        *selected_point = 0;
+                        *context_menu_position = None;
+                        *visible_y_bounds = None;
+                        *drag_scroll_y_bounds = None;
+                        changed = true;
+                        commit_requested = true;
+                    }
+                    ui.close();
+                }
+            });
             if ui.button("中継点追加").clicked() {
                 *selected_point = Self::insert_timecontrol_point(
                     timecontrol,
