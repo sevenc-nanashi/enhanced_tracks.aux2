@@ -239,7 +239,7 @@ impl KeyframesGui {
                 && let crate::keyframe::Keyframe::Easing(ref current_kf_info) =
                     keyframes.keyframes[section.0]
                 && crate::EASINGS
-                    .get()
+                    .read()
                     .unwrap()
                     .get(&current_kf_info.easing)
                     .is_some_and(|easing| easing.has_timecontrol)
@@ -390,7 +390,7 @@ impl KeyframesGui {
             let easing = match keyframes.keyframes[i] {
                 crate::keyframe::Keyframe::Easing(ref easing) => {
                     if crate::EASINGS
-                        .get()
+                        .read()
                         .unwrap()
                         .get(&easing.easing)
                         .is_some_and(|e| e.has_timecontrol)
@@ -565,8 +565,7 @@ impl KeyframesGui {
         current_level: &str,
         update_keyframe: impl FnOnce(crate::keyframe::Keyframes),
     ) {
-        let default = indexmap::IndexMap::new();
-        let easings = crate::EASINGS.get().unwrap_or(&default);
+        let easings = crate::EASINGS.read().unwrap();
         let mut update_keyframe_once = Some(update_keyframe);
         let mut update_keyframe = |new_keyframes: crate::keyframe::Keyframes| {
             if let Some(f) = update_keyframe_once.take() {
@@ -613,7 +612,7 @@ impl KeyframesGui {
         ui.menu_button("移動方法", |ui| {
             // TODO: ちゃんとlabelごとに階層にする
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
-                Self::show_easing_choices(ui, keyframes, index, easings, &mut update_keyframe);
+                Self::show_easing_choices(ui, keyframes, index, &easings, &mut update_keyframe);
             });
         });
     }

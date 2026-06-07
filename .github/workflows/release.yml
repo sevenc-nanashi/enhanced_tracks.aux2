@@ -65,4 +65,4 @@ jobs:
           tag_name: ${{ github.event.inputs.version }}
           body_path: ./release/README.md
           files: |
-            ./release/sevenc-nanashi.keyframes-aux2-v*.au2pkg.zip
+            ./release/sevenc-nanashi.enhanced_tracks-aux2-v*.au2pkg.zip

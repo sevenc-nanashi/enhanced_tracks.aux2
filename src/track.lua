@@ -3,7 +3,7 @@
 --param:Scene ID,0
 --param:Project Session Nonce,0
 
-local mod = obj.module("keyframes.aux2")
+local mod = obj.module("enhanced_tracks.aux2")
 local ffi = require("ffi")
 local bank_id, keyframe_id, scene_id, project_session_nonce = obj.getpoint("param")
 local index, ratio = math.modf(obj.getpoint("index"))

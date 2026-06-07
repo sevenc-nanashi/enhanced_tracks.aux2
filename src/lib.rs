@@ -21,8 +21,9 @@ pub struct CurrentSceneUsageInfo {
 
 pub static EFFECTS: std::sync::LazyLock<dashmap::DashMap<String, aviutl2::generic::Effect>> =
     std::sync::LazyLock::new(dashmap::DashMap::new);
-pub static EASINGS: std::sync::OnceLock<indexmap::IndexMap<String, crate::keyframe::Easing>> =
-    std::sync::OnceLock::new();
+pub static EASINGS: std::sync::LazyLock<
+    std::sync::RwLock<indexmap::IndexMap<String, crate::keyframe::Easing>>,
+> = std::sync::LazyLock::new(|| std::sync::RwLock::new(indexmap::IndexMap::new()));
 pub static EDIT_HANDLE: aviutl2::generic::GlobalEditHandle =
     aviutl2::generic::GlobalEditHandle::new();
 pub static OBJECT_ID_TO_HANDLE: std::sync::LazyLock<
@@ -114,7 +115,7 @@ impl KeyframeTrackParams {
             lazy_regex::lazy_regex!(r"^[0-9\.]+$");
         if STATIC_VALUE_PATTERN.is_match(track) {
             track.replace_with(&format!(
-                "{},{},keyframes.aux2,0|{},{},{},{}",
+                "{},{},enhanced_tracks.aux2,0|{},{},{},{}",
                 track,
                 track,
                 self.bank_id,
@@ -132,7 +133,7 @@ impl KeyframeTrackParams {
         let flags = captures.name("flags").unwrap();
         let rest = captures.name("rest").unwrap();
         let new_alias = format!(
-            "keyframes.aux2,{}|{},{},{},{}{}",
+            "enhanced_tracks.aux2,{}|{},{},{},{}{}",
             flags.as_str(),
             self.bank_id,
             self.keyframes_id,
@@ -172,19 +173,19 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
         );
         Ok(Self {
             mod2: aviutl2::generic::SubPlugin::new_script_module(&info)?,
-            gui: aviutl2_eframe::EframeWindow::new("keyframes.aux2", crate::gui::create_gui)?,
+            gui: aviutl2_eframe::EframeWindow::new("enhanced_tracks.aux2", crate::gui::create_gui)?,
         })
     }
 
     fn plugin_info(&self) -> aviutl2::generic::GenericPluginTable {
         aviutl2::generic::GenericPluginTable {
-            name: "keyframes.aux2".into(),
+            name: "enhanced_tracks.aux2".into(),
             information: "".into(),
         }
     }
 
     fn register(&mut self, registry: &mut aviutl2::generic::HostAppHandle) {
-        registry.register_script_module(Some("keyframes.aux2"), &self.mod2);
+        registry.register_script_module(Some("enhanced_tracks.aux2"), &self.mod2);
         let handle = registry.create_edit_handle();
         let window = handle.get_host_app_window_raw().unwrap();
         match self.gui.handle() {
@@ -195,7 +196,7 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
                     )) as f32
                         / 96.0
                 });
-                let _ = registry.register_window_client("keyframes.aux2", &handle);
+                let _ = registry.register_window_client("enhanced_tracks.aux2", &handle);
             }
             Err(e) => {
                 tracing::error!("Failed to register GUI window: {:?}", e);
@@ -253,6 +254,17 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
         }
         clear_unused_keyframes(&edit.info, edit);
     }
+
+    fn on_clear_cache(&mut self, _edit: &aviutl2::generic::EditSection) {
+        match load_easings() {
+            Ok(_) => {
+                tracing::info!("Easings reloaded successfully");
+            }
+            Err(e) => {
+                tracing::error!("Failed to reload easings: {:?}", e);
+            }
+        }
+    }
 }
 
 fn clear_unused_keyframes(info: &aviutl2::generic::EditInfo, read: &aviutl2::generic::ReadSection) {
@@ -287,6 +299,10 @@ fn load_effects() -> anyhow::Result<()> {
         EFFECTS.insert(effect.name.clone(), effect);
     }
     tracing::info!("Loaded {} effects", EFFECTS.len());
+    load_easings()
+}
+
+fn load_easings() -> anyhow::Result<()> {
     tracing::info!("Loading easings...");
     let mut easings = vec![];
     let standard_easings =
@@ -409,7 +425,7 @@ fn load_effects() -> anyhow::Result<()> {
         }
     }
 
-    easings.retain(|easing| easing.name != "keyframes.aux2");
+    easings.retain(|easing| easing.name != "enhanced_tracks.aux2");
 
     tracing::info!("Total easings loaded: {}", easings.len());
 
@@ -434,9 +450,7 @@ fn load_effects() -> anyhow::Result<()> {
         }
         index_map.insert(easing.name.clone(), easing);
     }
-    if EASINGS.set(index_map).is_err() {
-        panic!("Failed to set easings");
-    }
+    *EASINGS.write().unwrap() = index_map;
 
     Ok(())
 }
@@ -480,7 +494,7 @@ mod tests {
 
     #[test]
     fn test_keyframe_track_params_parse() {
-        let alias = "0,2,keyframes.aux2,0|1,2,3,4";
+        let alias = "0,2,enhanced_tracks.aux2,0|1,2,3,4";
         let params = KeyframeTrackParams::parse(alias).unwrap();
         assert_eq!(params.bank_id, 1);
         assert_eq!(params.keyframes_id, 2);
@@ -498,7 +512,7 @@ mod tests {
             project_session_nonce: 4,
         };
         params.set_params(&mut track).unwrap();
-        assert_eq!(track, "0.5,0.5,keyframes.aux2,0|1,2,3,4");
+        assert_eq!(track, "0.5,0.5,enhanced_tracks.aux2,0|1,2,3,4");
     }
 
     #[test]
@@ -511,7 +525,7 @@ mod tests {
             project_session_nonce: 4,
         };
         params.set_params(&mut track).unwrap();
-        assert_eq!(track, "0,0,keyframes.aux2,8|1,2,3,4|test");
+        assert_eq!(track, "0,0,enhanced_tracks.aux2,8|1,2,3,4|test");
     }
 
     #[test]
@@ -524,6 +538,6 @@ mod tests {
             project_session_nonce: 4,
         };
         params.set_params(&mut track).unwrap();
-        assert_eq!(track, "0,0,keyframes.aux2,8|1,2,3,4|test");
+        assert_eq!(track, "0,0,enhanced_tracks.aux2,8|1,2,3,4|test");
     }
 }

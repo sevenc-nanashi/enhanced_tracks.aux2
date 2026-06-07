@@ -6,7 +6,7 @@ build:
   out_dir: build
 
 scripts:
-  - name: keyframes.aux2.tra2
+  - name: enhanced_tracks.aux2.tra2
     sources:
       - path: src/track.lua
 

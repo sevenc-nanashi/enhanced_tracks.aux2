@@ -1,13 +1,13 @@
 #:schema ./.aviutl2-cli/aviutl2.schema.json
 
 [project]
-id = "sevenc-nanashi.keyframes-aux2"
-name = "keyframes.aux2"
+id = "sevenc-nanashi.enhanced_tracks-aux2"
+name = "enhanced_tracks.aux2"
 version = "0.1.0"
 
-[artifacts.keyframes-aux2-tra2]
-destination = "Script/keyframes.aux2.tra2"
-source = "build/keyframes.aux2.tra2"
+[artifacts.enhanced_tracks-aux2-tra2]
+destination = "Script/enhanced_tracks.aux2.tra2"
+source = "build/enhanced_tracks.aux2.tra2"
 build = "aulua build"
 
 [artifacts.embedded-tra2]
@@ -16,14 +16,14 @@ source = "build/@embedded.tra2"
 build = "aulua build"
 profiles.release.enabled = false
 
-[artifacts.keyframes-aux2]
-destination = "Plugin/keyframes.aux2"
+[artifacts.enhanced_tracks-aux2]
+destination = "Plugin/enhanced_tracks.aux2"
 
-[artifacts.keyframes-aux2.profiles.debug]
+[artifacts.enhanced_tracks-aux2.profiles.debug]
 source = "target/debug/keyframes_aux2.dll"
 build = ["aulua build", "cargo build"]
 
-[artifacts.keyframes-aux2.profiles.release]
+[artifacts.enhanced_tracks-aux2.profiles.release]
 source = "target/release/keyframes_aux2.dll"
 build = ["aulua build", "cargo build --release"]
 

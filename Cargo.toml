@@ -1,5 +1,5 @@
 [package]
-name = "keyframes-aux2"
+name = "enhanced_tracks-aux2"
 version = "0.1.0-preview.9"
 edition = "2024"
 
@@ -8,8 +8,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0.102"
-aviutl2 = { version = "0.30.0", features = ["serde"] }
-aviutl2-eframe = "0.30.0"
+aviutl2 = { version = "0.31.0", features = ["serde"] }
+aviutl2-eframe = "0.31.0"
 dashmap = "6.2.1"
 egui_extras = { version = "0.34.3", features = ["svg"] }
 encoding_rs = "0.8.35"

@@ -13,7 +13,7 @@ impl aviutl2::module::ScriptModule for KeyframesMod2 {
 
     fn plugin_info(&self) -> aviutl2::module::ScriptModuleTable {
         aviutl2::module::ScriptModuleTable {
-            information: "keyframes.aux2: internal module".into(),
+            information: "enhanced_tracks.aux2: internal module".into(),
             functions: Self::functions(),
         }
     }
@@ -75,11 +75,8 @@ impl KeyframesMod2 {
                 crate::keyframe::Keyframe::Ignored => (),
             }
         }
-        let easing = crate::EASINGS
-            .get()
-            .context("easings not initialized")?
-            .get(&keyframe.easing)
-            .context("easing not found")?;
+        let easings = crate::EASINGS.read().unwrap();
+        let easing = easings.get(&keyframe.easing).context("easing not found")?;
         Ok((
             indices,
             easing.name.clone(),
