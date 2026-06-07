@@ -20,11 +20,11 @@ profiles.release.enabled = false
 destination = "Plugin/enhanced_tracks.aux2"
 
 [artifacts.enhanced_tracks-aux2.profiles.debug]
-source = "target/debug/keyframes_aux2.dll"
+source = "target/debug/enhanced_tracks_aux2.dll"
 build = ["aulua build", "cargo build"]
 
 [artifacts.enhanced_tracks-aux2.profiles.release]
-source = "target/release/keyframes_aux2.dll"
+source = "target/release/enhanced_tracks_aux2.dll"
 build = ["aulua build", "cargo build --release"]
 
 [development]
