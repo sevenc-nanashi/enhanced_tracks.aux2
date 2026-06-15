@@ -283,6 +283,16 @@ impl KeyframesGui {
         segment_index: usize,
     ) -> bool {
         let mut changed = false;
+        if timecontrol.segment_mode(segment_index) == Some(crate::keyframe::TimeControlMode::Bezier)
+        {
+            if ui.button("反転").clicked() {
+                Self::reverse_timecontrol_bezier_segment(timecontrol, segment_index);
+                changed = true;
+                ui.close();
+            }
+            return changed;
+        }
+
         let Some(mut reversed) = timecontrol.segment_reversed(segment_index) else {
             return false;
         };
@@ -294,6 +304,74 @@ impl KeyframesGui {
             ui.close();
         }
         changed
+    }
+
+    pub fn reverse_timecontrol_bezier_segment(
+        timecontrol: &mut crate::keyframe::TimeControl,
+        segment_index: usize,
+    ) {
+        if timecontrol.segment_mode(segment_index) != Some(crate::keyframe::TimeControlMode::Bezier)
+            || segment_index + 1 >= timecontrol.points.len()
+        {
+            return;
+        }
+
+        let end_index = segment_index + 1;
+        let start = timecontrol.points[segment_index].position;
+        let end = timecontrol.points[end_index].position;
+        let start_out = timecontrol.points[segment_index]
+            .out_handle
+            .unwrap_or(start);
+        let end_in = timecontrol.points[end_index].in_handle.unwrap_or(end);
+        let new_start_out = Self::constrain_timecontrol_handle_position(
+            timecontrol,
+            segment_index,
+            TimeControlHandleKind::Out,
+            [start[0] + end[0] - end_in[0], start[1] + end[1] - end_in[1]],
+        );
+        let new_end_in = Self::constrain_timecontrol_handle_position(
+            timecontrol,
+            end_index,
+            TimeControlHandleKind::In,
+            [start[0] + end[0] - start_out[0], start[1] + end[1] - start_out[1]],
+        );
+
+        if !timecontrol.points[segment_index].handles_separated
+            && timecontrol.points[segment_index].in_handle.is_some()
+        {
+            let mirrored_in = Self::constrain_timecontrol_handle_position(
+                timecontrol,
+                segment_index,
+                TimeControlHandleKind::In,
+                [
+                    start[0] * 2.0 - new_start_out[0],
+                    start[1] * 2.0 - new_start_out[1],
+                ],
+            );
+            if timecontrol.points[segment_index].in_handle != Some(mirrored_in) {
+                timecontrol.points[segment_index].handles_separated = true;
+            }
+        }
+        if !timecontrol.points[end_index].handles_separated
+            && timecontrol.points[end_index].out_handle.is_some()
+        {
+            let mirrored_out = Self::constrain_timecontrol_handle_position(
+                timecontrol,
+                end_index,
+                TimeControlHandleKind::Out,
+                [
+                    end[0] * 2.0 - new_end_in[0],
+                    end[1] * 2.0 - new_end_in[1],
+                ],
+            );
+            if timecontrol.points[end_index].out_handle != Some(mirrored_out) {
+                timecontrol.points[end_index].handles_separated = true;
+            }
+        }
+
+        timecontrol.points[segment_index].out_handle = Some(new_start_out);
+        timecontrol.points[end_index].in_handle = Some(new_end_in);
+        Self::constrain_all_timecontrol_handles(timecontrol);
     }
 
     pub fn show_timecontrol_vertex(

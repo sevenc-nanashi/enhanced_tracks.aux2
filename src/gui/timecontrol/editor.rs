@@ -101,6 +101,10 @@ impl KeyframesGui {
                 changed = true;
                 commit_requested = true;
             }
+            if Self::show_timecontrol_segment_reverse_menu(ui, timecontrol, *selected_point) {
+                changed = true;
+                commit_requested = true;
+            }
             if ui.button("コピー").clicked() {
                 *clipboard = Some(timecontrol.clone());
                 ui.close();
