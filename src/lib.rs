@@ -6,10 +6,12 @@ use aviutl2_eframe::egui::TextBuffer;
 mod gui;
 mod keyframe;
 mod module;
+mod watcher;
 
 #[aviutl2::plugin(GenericPlugin)]
 struct KeyframesAux2 {
     mod2: aviutl2::generic::SubPlugin<crate::module::KeyframesMod2>,
+    watcher: watcher::WatcherThread,
     gui: aviutl2_eframe::EframeWindow,
 }
 
@@ -173,6 +175,7 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
         );
         Ok(Self {
             mod2: aviutl2::generic::SubPlugin::new_script_module(&info)?,
+            watcher: watcher::WatcherThread::start(),
             gui: aviutl2_eframe::EframeWindow::new("enhanced_tracks.aux2", crate::gui::create_gui)?,
         })
     }
@@ -253,6 +256,7 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
             *current_bank_id += 1;
         }
         clear_unused_keyframes(&edit.info, edit);
+        self.watcher.notify_object_change();
     }
 
     fn on_clear_cache(&mut self, _edit: &aviutl2::generic::EditSection) {
@@ -264,6 +268,10 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
                 tracing::error!("Failed to reload easings: {:?}", e);
             }
         }
+    }
+
+    fn event_update_object_info(&mut self) {
+        self.watcher.notify_object_change();
     }
 }
 
