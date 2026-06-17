@@ -333,7 +333,10 @@ impl KeyframesGui {
             timecontrol,
             end_index,
             TimeControlHandleKind::In,
-            [start[0] + end[0] - start_out[0], start[1] + end[1] - start_out[1]],
+            [
+                start[0] + end[0] - start_out[0],
+                start[1] + end[1] - start_out[1],
+            ],
         );
 
         if !timecontrol.points[segment_index].handles_separated
@@ -359,10 +362,7 @@ impl KeyframesGui {
                 timecontrol,
                 end_index,
                 TimeControlHandleKind::Out,
-                [
-                    end[0] * 2.0 - new_end_in[0],
-                    end[1] * 2.0 - new_end_in[1],
-                ],
+                [end[0] * 2.0 - new_end_in[0], end[1] * 2.0 - new_end_in[1]],
             );
             if timecontrol.points[end_index].out_handle != Some(mirrored_out) {
                 timecontrol.points[end_index].handles_separated = true;
@@ -1071,15 +1071,13 @@ impl KeyframesGui {
         if target.dirty {
             return Ok(());
         }
-        let track = read
-            .get_object_effect_item(
-                target.object,
-                &target.effect_name,
-                target.effect_index,
-                &target.track_names[0],
-            )
-            .context("Failed to get object effect item for time control editor")?;
-        let params = match crate::KeyframeTrackParams::parse(&track) {
+        let params = match crate::KeyframeTrackParams::parse(
+            read,
+            target.object,
+            &target.effect_name,
+            target.effect_index,
+            &target.track_names[0],
+        ) {
             Some(params) => params,
             None => {
                 tracing::error!(

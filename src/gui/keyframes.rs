@@ -518,16 +518,7 @@ impl KeyframesGui {
                 {
                     crate::KEYFRAMES.insert(new_params, keyframes);
                 }
-                let mut before =
-                    edit.get_object_effect_item(object.handle, &effect.name, effect.index, name)?;
-                new_params.set_params(&mut before)?;
-                edit.set_object_effect_item(
-                    object.handle,
-                    &effect.name,
-                    effect.index,
-                    name,
-                    &before,
-                )?;
+                new_params.set_params(edit, object.handle, &effect.name, effect.index, name)?;
                 anyhow::Ok(())
             })
             .map_err(anyhow::Error::from)

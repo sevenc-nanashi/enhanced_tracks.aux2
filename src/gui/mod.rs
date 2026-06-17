@@ -309,10 +309,7 @@ impl KeyframesGui {
                 let new_params = crate::KeyframeTrackParams::new(edit.info.scene_id);
                 crate::KEYFRAMES.insert(new_params, new_keyframes);
                 for name in track_names {
-                    let mut before =
-                        edit.get_object_effect_item(object, effect_name, effect_index, name)?;
-                    new_params.set_params(&mut before)?;
-                    edit.set_object_effect_item(object, effect_name, effect_index, name, &before)?;
+                    new_params.set_params(edit, object, effect_name, effect_index, name)?;
                 }
                 anyhow::Ok(new_params)
             })
@@ -413,9 +410,10 @@ impl KeyframesGui {
                 .get(effect_name)
                 .context("Failed to get effect info")?;
             let effect_type = Self::determine_effect_type(&effect_info, Some(first_effect_type));
-            let effect_index = effect_count.entry(effect_name.to_string()).or_insert(0);
-            *effect_index += 1;
-            let effect_index = *effect_index - 1;
+            let effect_index = *effect_count
+                .entry(effect_name.to_string())
+                .and_modify(|c| *c += 1)
+                .or_insert(0);
 
             let mut effect_info = EffectInfo {
                 name: effect_name.to_string(),
@@ -427,17 +425,13 @@ impl KeyframesGui {
                 if item.item_type != aviutl2::generic::EffectItemType::Number {
                     return;
                 }
-                // NOTE:
-                // エフェクトごとのカウンターとかが面倒なのでEffectItemはitem_typeのチェックでしか使わない
-                let Some(value) = object.get_value(&item.name) else {
-                    tracing::error!(
-                        "Failed to get value for effect item {:?} in effect {:?}",
-                        item.name,
-                        effect_name
-                    );
-                    return;
-                };
-                if let Some(params) = crate::KeyframeTrackParams::parse(value) {
+                if let Some(params) = crate::KeyframeTrackParams::parse(
+                    read,
+                    selected_object,
+                    effect_name,
+                    effect_index,
+                    &item.name,
+                ) {
                     // let keyframe_info = KeyframeTrackInfo {
                     //     name: key.to_string(),
                     //     params,

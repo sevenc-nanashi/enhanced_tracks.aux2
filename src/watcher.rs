@@ -21,7 +21,7 @@ impl WatcherThread {
         let thread = std::thread::spawn(move || {
             tracing::info!("Watcher thread started");
             while let Ok(message) = receiver.recv() {
-                tracing::debug!("Watcher thread received message: {:?}", message);
+                tracing::trace!("Watcher thread received message: {:?}", message);
                 match message {
                     WatcherMessage::ObjectChanged => on_object_change(),
                     WatcherMessage::Shutdown => break,
@@ -263,7 +263,7 @@ fn apply_bindings_change(
                     binding.track_name,
                     new_params
                 );
-                let mut track = edit.get_object_effect_item(
+                let track = edit.get_object_effect_item(
                     binding.object,
                     &binding.effect_name,
                     binding.effect_index,
@@ -277,17 +277,28 @@ fn apply_bindings_change(
                     binding.track_name,
                     &track
                 );
-                let previous_params = crate::KeyframeTrackParams::parse(&track);
-                if let Some(previous_params) = previous_params && previous_params.bank_id != 0 {
-                    resolved_migrations.insert(previous_params);
-                }
-                new_params.set_params(&mut track)?;
-                edit.set_object_effect_item(
+                let previous_params = crate::KeyframeTrackParams::parse(
+                    edit,
                     binding.object,
                     &binding.effect_name,
                     binding.effect_index,
                     &binding.track_name,
-                    &track,
+                );
+                if let Some(previous_params) = previous_params && previous_params.bank_id != 0 {
+                    resolved_migrations.insert(previous_params);
+                }
+                new_params.set_params(
+                    edit,
+                    binding.object,
+                    &binding.effect_name,
+                    binding.effect_index,
+                    &binding.track_name,
+                )?;
+                let track = edit.get_object_effect_item(
+                    binding.object,
+                    &binding.effect_name,
+                    binding.effect_index,
+                    &binding.track_name,
                 )?;
                 tracing::debug!(
                     "Updated keyframe track params for object {:?}, effect {:?} (index {}), track {:?} to {:?}",
@@ -321,17 +332,21 @@ fn collect_object_keyframe_bindings(
         let effect_name = object
             .get_value("effect.name")
             .context("Failed to get effect name")?;
-        let effect_index = effect_count.entry(effect_name.to_string()).or_insert(0);
-        *effect_index += 1;
-        let effect_index = *effect_index - 1;
+        let effect_index = *effect_count
+            .entry(effect_name.to_string())
+            .and_modify(|count| *count += 1)
+            .or_insert(0);
         crate::EDIT_HANDLE.enumerate_effect_items(effect_name, |item| {
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }
-            let Some(value) = object.get_value(&item.name) else {
-                return;
-            };
-            let Some(params) = crate::KeyframeTrackParams::parse(value) else {
+            let Some(params) = crate::KeyframeTrackParams::parse(
+                read,
+                object_handle,
+                effect_name,
+                effect_index,
+                &item.name,
+            ) else {
                 return;
             };
             bindings

@@ -29,7 +29,7 @@ build = ["aulua build", "cargo build --release"]
 
 [development]
 aviutl2_version = "latest"
-catalog_dependencies = ["KuroNeko.CopyAlias", "sigma-axis.Basic_S"]
+catalog_dependencies = ["KuroNeko.CopyAlias", "sigma-axis.Basic_S", "sevenc-nanashi.insert-aux2"]
 
 [release]
 package_template = "./release/package.txt"

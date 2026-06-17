@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::Context;
-use aviutl2_eframe::egui::TextBuffer;
+use lazy_regex::regex;
 
 mod gui;
 mod keyframe;
@@ -92,19 +92,27 @@ pub struct KeyframeBinding {
 }
 
 impl KeyframeTrackParams {
-    pub fn parse(alias: &str) -> Option<Self> {
-        static KEYFRAME_PATTERN: lazy_regex::Lazy<lazy_regex::regex::Regex> = lazy_regex::lazy_regex!(
-            r",enhanced_tracks\.aux2,\d+\|(?<bank_id>\d+),(?<keyframes_id>\d+),(?<scene_id>\d+),(?<project_session_nonce>\d+)(?:$|\|)"
-        );
-        let captures = KEYFRAME_PATTERN.captures(alias)?;
-        let bank_id: usize = captures.name("bank_id")?.as_str().parse().ok()?;
-        let keyframes_id: usize = captures.name("keyframes_id")?.as_str().parse().ok()?;
-        let scene_id: i32 = captures.name("scene_id")?.as_str().parse().ok()?;
-        let project_session_nonce: usize = captures
-            .name("project_session_nonce")?
-            .as_str()
-            .parse()
-            .ok()?;
+    pub fn parse(
+        read: &aviutl2::generic::ReadSection,
+        object: aviutl2::generic::ObjectHandle,
+        effect_name: &str,
+        effect_index: usize,
+        track_name: &str,
+    ) -> Option<Self> {
+        let info = read
+            .get_object_track_info(object, effect_name, effect_index, track_name)
+            .ok()??;
+        if info.mode != "enhanced_tracks.aux2" {
+            return None;
+        }
+
+        if info.params.len() != 4 {
+            return None;
+        }
+        let bank_id: usize = info.params[0] as usize;
+        let keyframes_id: usize = info.params[1] as usize;
+        let scene_id: i32 = info.params[2] as i32;
+        let project_session_nonce: usize = info.params[3] as usize;
         Some(Self {
             bank_id,
             keyframes_id,
@@ -112,48 +120,111 @@ impl KeyframeTrackParams {
             project_session_nonce,
         })
     }
-    pub fn set_params(&self, track: &mut String) -> anyhow::Result<()> {
-        static STATIC_VALUE_PATTERN: lazy_regex::Lazy<lazy_regex::regex::Regex> =
-            lazy_regex::lazy_regex!(r"^[0-9\.]+$");
-        if STATIC_VALUE_PATTERN.is_match(track) {
-            track.replace_with(&format!(
-                "{},{},enhanced_tracks.aux2,0|{},{},{},{}",
-                track,
-                track,
-                self.bank_id,
-                self.keyframes_id,
-                self.scene_id,
-                self.project_session_nonce
-            ));
-            return Ok(());
-        }
-        static KEYFRAME_PATTERN: lazy_regex::Lazy<lazy_regex::regex::Regex> =
-            lazy_regex::lazy_regex!(r"(?<easing>[^,]+),(?<flags>\d+)(?<rest>$|\|[^|]*$|\|[^|]*\|)");
-        let captures = KEYFRAME_PATTERN
-            .captures(track)
-            .context("Failed to match keyframe alias pattern")?;
-        let flags = captures.name("flags").unwrap();
-        let rest = captures.name("rest").unwrap();
-        let new_alias = format!(
-            "enhanced_tracks.aux2,{}|{},{},{},{}{}",
-            flags.as_str(),
-            self.bank_id,
-            self.keyframes_id,
-            self.scene_id,
-            self.project_session_nonce,
-            if let Some(params) = rest.as_str().strip_prefix('|') {
-                if let Some((_old_params, expr)) = params.split_once('|') {
-                    format!("|{expr}")
-                } else {
-                    format!("|{params}")
-                }
-            } else {
-                "".to_string()
-            }
+    pub fn set_params(
+        &self,
+        edit: &aviutl2::generic::EditSection,
+        object: aviutl2::generic::ObjectHandle,
+        effect_name: &str,
+        effect_index: usize,
+        track_name: &str,
+    ) -> anyhow::Result<()> {
+        let current_params = edit
+            .get_object_track_info(object, effect_name, effect_index, track_name)
+            .context("Failed to get current track info")?;
+        let current_track =
+            edit.get_object_effect_item(object, effect_name, effect_index, track_name)?;
+        let track_alias_param = format!(
+            "{},{},{},{}",
+            self.bank_id, self.keyframes_id, self.scene_id, self.project_session_nonce
         );
-        let start = captures.get(0).unwrap().start();
-        let end = captures.get(0).unwrap().end();
-        track.replace_range(start..end, &new_alias);
+        let new_track = match current_params {
+            None => {
+                if let Some((not_expr, expr)) = current_track.split_once('|')
+                    && let Some((value, _flags)) = not_expr.split_once(',')
+                {
+                    format!("{value},{value},enhanced_tracks.aux2,8|{track_alias_param}|{expr}",)
+                } else {
+                    format!("{current_track},enhanced_tracks.aux2,0|{track_alias_param}")
+                }
+            }
+            Some(track) => {
+                let has_expression = {
+                    let (left, _right) = current_track.split_once('|').ok_or_else(|| {
+                        anyhow::anyhow!("Unexpected track format: {current_track:?}")
+                    })?;
+                    let flags = left
+                        .split(",")
+                        .last()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("Unexpected track format: {current_track:?}")
+                        })?
+                        .parse::<u32>()
+                        .map_err(|e| {
+                            anyhow::anyhow!(
+                                "Failed to parse flags from track: {current_track:?}, error: {e}"
+                            )
+                        })?;
+                    flags & 8 != 0
+                };
+                let mut pattern = "^".to_string();
+                if track.twopoint {
+                    pattern.push_str("(?<values>[-0-9\\.]+,[-0-9\\.]+)");
+                } else {
+                    pattern.push_str("(?<values>");
+                    for i in 0..=edit.get_object_section_num(object)? {
+                        if i != 0 {
+                            pattern.push(',');
+                        }
+                        pattern.push_str("[-0-9\\.]+");
+                    }
+                    pattern.push(')')
+                }
+                pattern.push(',');
+                pattern.push_str(&regex::escape(&track.mode));
+                pattern.push_str(",[-0-9]+");
+                if !track.params.is_empty() {
+                    pattern.push_str("\\|");
+                    for i in 0..track.params.len() {
+                        if i != 0 {
+                            pattern.push(',');
+                        }
+                        pattern.push_str("[-0-9\\.]+");
+                    }
+                }
+                if track.timecontrol {
+                    pattern.push_str("\\|");
+                    pattern.push_str("[^|]*");
+                }
+                if has_expression {
+                    pattern.push_str("\\|");
+                    pattern.push_str("(?<expr>.*)");
+                }
+
+                let pattern = regex::Regex::new(&pattern).map_err(|e| {
+                    anyhow::anyhow!("Failed to compile regex pattern: {pattern:?}, error: {e}")
+                })?;
+                let Some(captures) = pattern.captures(&current_track) else {
+                    return Err(anyhow::anyhow!(
+                        "Failed to match current track with pattern: {pattern:?}, current track: {current_track:?}"
+                    ));
+                };
+                let values = captures
+                    .name("values")
+                    .ok_or_else(|| anyhow::anyhow!("Failed to retrieve `values`"))?
+                    .as_str();
+                let expr = captures.name("expr").map(|m| m.as_str());
+                if has_expression {
+                    format!(
+                        "{values},enhanced_tracks.aux2,8|{track_alias_param}|{expr}",
+                        expr = expr.unwrap_or("")
+                    )
+                } else {
+                    format!("{values},enhanced_tracks.aux2,0|{track_alias_param}")
+                }
+            }
+        };
+        edit.set_object_effect_item(object, effect_name, effect_index, track_name, &new_track)
+            .context("Failed to set new track")?;
         Ok(())
     }
 }
@@ -474,18 +545,26 @@ fn collect_used_keyframes(
     let objects = alias
         .get_table("Object")
         .context("Failed to get Object table")?;
-    for object in objects.iter_subtables_as_array() {
-        let effect_name = object
+    let mut effect_indices = std::collections::HashMap::new();
+    for effect in objects.iter_subtables_as_array() {
+        let effect_name = effect
             .get_value("effect.name")
             .context("Failed to get effect name")?;
+        let effect_index = *effect_indices
+            .entry(effect_name.clone())
+            .and_modify(|index| *index += 1)
+            .or_insert(0);
         crate::EDIT_HANDLE.enumerate_effect_items(effect_name, |item| {
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }
-            let Some(value) = object.get_value(&item.name) else {
-                return;
-            };
-            let Some(params) = crate::KeyframeTrackParams::parse(value) else {
+            let Some(params) = crate::KeyframeTrackParams::parse(
+                edit,
+                object,
+                effect_name,
+                effect_index,
+                &item.name,
+            ) else {
                 return;
             };
             used_keyframes.insert(params);
@@ -495,57 +574,3 @@ fn collect_used_keyframes(
 }
 
 aviutl2::register_generic_plugin!(KeyframesAux2);
-
-#[cfg(test)]
-mod tests {
-    use crate::KeyframeTrackParams;
-
-    #[test]
-    fn test_keyframe_track_params_parse() {
-        let alias = "0,2,enhanced_tracks.aux2,0|1,2,3,4";
-        let params = KeyframeTrackParams::parse(alias).unwrap();
-        assert_eq!(params.bank_id, 1);
-        assert_eq!(params.keyframes_id, 2);
-        assert_eq!(params.scene_id, 3);
-        assert_eq!(params.project_session_nonce, 4);
-    }
-
-    #[test]
-    fn test_keyframe_track_params_set_params_static() {
-        let mut track = "0.5".to_string();
-        let params = KeyframeTrackParams {
-            bank_id: 1,
-            keyframes_id: 2,
-            scene_id: 3,
-            project_session_nonce: 4,
-        };
-        params.set_params(&mut track).unwrap();
-        assert_eq!(track, "0.5,0.5,enhanced_tracks.aux2,0|1,2,3,4");
-    }
-
-    #[test]
-    fn test_keyframe_track_params_set_params_keyframe_no_params() {
-        let mut track = "0,0,easeInOutSine,8|test".to_string();
-        let params = KeyframeTrackParams {
-            bank_id: 1,
-            keyframes_id: 2,
-            scene_id: 3,
-            project_session_nonce: 4,
-        };
-        params.set_params(&mut track).unwrap();
-        assert_eq!(track, "0,0,enhanced_tracks.aux2,8|1,2,3,4|test");
-    }
-
-    #[test]
-    fn test_keyframe_track_params_set_params_keyframe_with_params() {
-        let mut track = "0,0,easeInOutSine,8|1,2|test".to_string();
-        let params = KeyframeTrackParams {
-            bank_id: 1,
-            keyframes_id: 2,
-            scene_id: 3,
-            project_session_nonce: 4,
-        };
-        params.set_params(&mut track).unwrap();
-        assert_eq!(track, "0,0,enhanced_tracks.aux2,8|1,2,3,4|test");
-    }
-}
