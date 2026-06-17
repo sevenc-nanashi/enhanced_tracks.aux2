@@ -17,6 +17,7 @@ iconify = "0.3.1"
 include_dir = "0.7.4"
 indexmap = "2.14.0"
 lazy-regex = "3.6.0"
+nucleo-matcher = "0.3.1"
 rand = "0.10.1"
 serde = { version = "1.0.228", features = ["derive"] }
 tap = "1.0.1"

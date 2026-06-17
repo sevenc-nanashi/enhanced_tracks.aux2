@@ -4,6 +4,17 @@ use aviutl2_eframe::egui;
 
 static SECTION_SEPARATOR_HITBOX_WEIGHT: f32 = 4.0;
 
+struct EasingSearchItem<'a> {
+    easing: &'a crate::keyframe::Easing,
+    text: String,
+}
+
+impl AsRef<str> for EasingSearchItem<'_> {
+    fn as_ref(&self) -> &str {
+        &self.text
+    }
+}
+
 impl KeyframesGui {
     pub fn render_selected_object_info(&mut self, ui: &mut egui::Ui) {
         let Some(selected_object_info) = self.selected_object_info.clone() else {
@@ -601,9 +612,35 @@ impl KeyframesGui {
             }
         });
         ui.menu_button("移動方法", |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let edit = ui.add(
+                    egui::TextEdit::singleline(&mut self.easing_search_text)
+                        .margin(egui::Margin::symmetric(4, 0))
+                        .hint_text("検索"),
+                );
+                if ui
+                    .add_enabled(
+                        !self.easing_search_text.is_empty(),
+                        egui::Button::new("×").min_size(egui::Vec2::splat(edit.rect.height())),
+                    )
+                    .on_hover_text("検索をクリア")
+                    .clicked()
+                {
+                    self.easing_search_text.clear();
+                }
+            });
+            ui.separator();
             // TODO: ちゃんとlabelごとに階層にする
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
-                Self::show_easing_choices(ui, keyframes, index, &easings, &mut update_keyframe);
+                Self::show_easing_choices(
+                    ui,
+                    keyframes,
+                    index,
+                    &easings,
+                    &self.easing_search_text,
+                    &mut update_keyframe,
+                );
             });
         });
     }
@@ -843,19 +880,63 @@ impl KeyframesGui {
         keyframes: &crate::keyframe::Keyframes,
         index: usize,
         easings: &indexmap::IndexMap<String, crate::keyframe::Easing>,
+        search_text: &str,
         update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
     ) {
-        for easing in easings.values() {
-            if ui
-                .add(egui::Button::new(&easing.name).selected(matches!(
-                    keyframes.keyframes[index],
-                    crate::keyframe::Keyframe::Easing(ref k)
-                    if k.easing == easing.name)))
-                .clicked()
-            {
-                let new_keyframes = Self::keyframes_with_easing(keyframes, index, easing);
-                update_keyframe(new_keyframes);
+        let search_text = search_text.trim();
+        if search_text.is_empty() {
+            for easing in easings.values() {
+                Self::show_easing_choice(ui, keyframes, index, easing, update_keyframe);
             }
+            return;
+        }
+
+        let mut matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
+        let pattern = nucleo_matcher::pattern::Pattern::parse(
+            search_text,
+            nucleo_matcher::pattern::CaseMatching::Ignore,
+            nucleo_matcher::pattern::Normalization::Smart,
+        );
+        let items = easings.values().map(|easing| EasingSearchItem {
+            easing,
+            text: Self::easing_search_text(easing),
+        });
+
+        let mut matches = pattern.match_list(items, &mut matcher);
+        matches.sort_by_key(|(item, score)| (std::cmp::Reverse(*score), item.easing.name.clone()));
+        if matches.is_empty() {
+            ui.label("見つかりませんでした");
+            return;
+        }
+        for (item, _) in matches.into_iter().take(100) {
+            Self::show_easing_choice(ui, keyframes, index, item.easing, update_keyframe);
+        }
+    }
+
+    fn easing_search_text(easing: &crate::keyframe::Easing) -> String {
+        if let Some(label) = &easing.label {
+            format!("{} {label}", easing.name)
+        } else {
+            easing.name.clone()
+        }
+    }
+
+    fn show_easing_choice(
+        ui: &mut egui::Ui,
+        keyframes: &crate::keyframe::Keyframes,
+        index: usize,
+        easing: &crate::keyframe::Easing,
+        update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
+    ) {
+        if ui
+            .add(egui::Button::new(&easing.name).selected(matches!(
+                keyframes.keyframes[index],
+                crate::keyframe::Keyframe::Easing(ref k)
+                if k.easing == easing.name)))
+            .clicked()
+        {
+            let new_keyframes = Self::keyframes_with_easing(keyframes, index, easing);
+            update_keyframe(new_keyframes);
         }
     }
 
