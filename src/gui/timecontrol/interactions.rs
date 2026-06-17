@@ -97,7 +97,10 @@ impl KeyframesGui {
                 };
                 painter.circle_filled(handle_pos, 4.0, color.linear_multiply(0.85));
                 handle_response.context_menu(|ui| {
-                    if ui.button("中継点追加").clicked() {
+                    if ui
+                        .button(aviutl2::config::translate("中継点追加"))
+                        .clicked()
+                    {
                         *selected_point = Self::insert_timecontrol_point(
                             timecontrol,
                             context_menu_position
@@ -252,11 +255,20 @@ impl KeyframesGui {
         let mut changed = false;
         let can_change = segment_index + 1 < timecontrol.points.len();
         ui.add_enabled_ui(can_change, |ui| {
-            ui.menu_button("区間方式", |ui| {
+            ui.menu_button(aviutl2::config::translate("区間方式"), |ui| {
                 for (mode, label) in [
-                    (crate::keyframe::TimeControlMode::Bezier, "ベジェ"),
-                    (crate::keyframe::TimeControlMode::Elastic, "Elastic"),
-                    (crate::keyframe::TimeControlMode::Bounce, "Bounce"),
+                    (
+                        crate::keyframe::TimeControlMode::Bezier,
+                        aviutl2::config::translate("ベジェ"),
+                    ),
+                    (
+                        crate::keyframe::TimeControlMode::Elastic,
+                        aviutl2::config::translate("Elastic"),
+                    ),
+                    (
+                        crate::keyframe::TimeControlMode::Bounce,
+                        aviutl2::config::translate("Bounce"),
+                    ),
                 ] {
                     if ui
                         .selectable_label(
@@ -285,7 +297,7 @@ impl KeyframesGui {
         let mut changed = false;
         if timecontrol.segment_mode(segment_index) == Some(crate::keyframe::TimeControlMode::Bezier)
         {
-            if ui.button("反転").clicked() {
+            if ui.button(aviutl2::config::translate("反転")).clicked() {
                 Self::reverse_timecontrol_bezier_segment(timecontrol, segment_index);
                 changed = true;
                 ui.close();
@@ -296,7 +308,10 @@ impl KeyframesGui {
         let Some(mut reversed) = timecontrol.segment_reversed(segment_index) else {
             return false;
         };
-        if ui.checkbox(&mut reversed, "反転").changed() {
+        if ui
+            .checkbox(&mut reversed, aviutl2::config::translate("反転"))
+            .changed()
+        {
             if timecontrol.segment_reversed(segment_index) != Some(reversed) {
                 timecontrol.set_segment_reversed(segment_index, reversed);
                 changed = true;
@@ -593,7 +608,10 @@ impl KeyframesGui {
         let mut changed = false;
         *selected_point = (*selected_point).min(timecontrol.points.len().saturating_sub(1));
 
-        if ui.button("中継点追加").clicked() {
+        if ui
+            .button(aviutl2::config::translate("中継点追加"))
+            .clicked()
+        {
             *selected_point = Self::insert_timecontrol_point(timecontrol, add_point_position);
             changed = true;
             ui.close();
@@ -601,7 +619,10 @@ impl KeyframesGui {
 
         let can_remove = *selected_point != 0 && *selected_point + 1 < timecontrol.points.len();
         if ui
-            .add_enabled(can_remove, egui::Button::new("中継点削除"))
+            .add_enabled(
+                can_remove,
+                egui::Button::new(aviutl2::config::translate("中継点削除")),
+            )
             .clicked()
         {
             Self::remove_timecontrol_point(timecontrol, selected_point);
@@ -666,9 +687,9 @@ impl KeyframesGui {
         let has_both_handles = timecontrol.points[*selected_point].in_handle.is_some()
             && timecontrol.points[*selected_point].out_handle.is_some();
         let label = if timecontrol.points[*selected_point].handles_separated {
-            "ハンドル連動"
+            aviutl2::config::translate("ハンドル連動")
         } else {
-            "ハンドル分離"
+            aviutl2::config::translate("ハンドル分離")
         };
         if ui
             .add_enabled(has_both_handles, egui::Button::new(label))
@@ -686,7 +707,10 @@ impl KeyframesGui {
         let has_any_handle = timecontrol.points[*selected_point].in_handle.is_some()
             || timecontrol.points[*selected_point].out_handle.is_some();
         if ui
-            .add_enabled(has_any_handle, egui::Button::new("ハンドルリセット"))
+            .add_enabled(
+                has_any_handle,
+                egui::Button::new(aviutl2::config::translate("ハンドルリセット")),
+            )
             .clicked()
         {
             Self::reset_timecontrol_handles(timecontrol, *selected_point);

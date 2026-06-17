@@ -6,6 +6,7 @@ use lazy_regex::regex;
 mod gui;
 mod keyframe;
 mod module;
+mod utils;
 mod watcher;
 
 #[aviutl2::plugin(GenericPlugin)]
@@ -167,18 +168,7 @@ impl KeyframeTrackParams {
                     flags & 8 != 0
                 };
                 let mut pattern = "^".to_string();
-                if track.twopoint {
-                    pattern.push_str("(?<values>[-0-9\\.]+,[-0-9\\.]+)");
-                } else {
-                    pattern.push_str("(?<values>");
-                    for i in 0..=edit.get_object_section_num(object)? {
-                        if i != 0 {
-                            pattern.push(',');
-                        }
-                        pattern.push_str("[-0-9\\.]+");
-                    }
-                    pattern.push(')')
-                }
+                pattern.push_str("(?<values>[-0-9\\.]+(?:,[-0-9\\.]+)*)");
                 pattern.push(',');
                 pattern.push_str(&regex::escape(&track.mode));
                 pattern.push_str(",[-0-9]+");

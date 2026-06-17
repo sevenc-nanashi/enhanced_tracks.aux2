@@ -3,7 +3,7 @@ use super::*;
 impl KeyframesGui {
     pub fn show_timecontrol_presets(ui: &mut egui::Ui) -> Option<crate::keyframe::TimeControl> {
         let mut selected = None;
-        ui.label("プリセット");
+        ui.label(aviutl2::config::translate("プリセット"));
         ui.add_space(4.0);
         let row_height = 58.0;
         let available_width = ui.available_width();

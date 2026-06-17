@@ -105,13 +105,13 @@ impl KeyframesGui {
                 changed = true;
                 commit_requested = true;
             }
-            if ui.button("コピー").clicked() {
+            if ui.button(aviutl2::config::translate("コピー")).clicked() {
                 *clipboard = Some(timecontrol.clone());
                 ui.close();
             }
             let can_paste = clipboard.is_some();
             ui.add_enabled_ui(can_paste, |ui| {
-                if ui.button("貼り付け").clicked() {
+                if ui.button(aviutl2::config::translate("貼り付け")).clicked() {
                     if let Some(copied) = clipboard.clone() {
                         *timecontrol = copied;
                         *selected_point = 0;
@@ -124,7 +124,10 @@ impl KeyframesGui {
                     ui.close();
                 }
             });
-            if ui.button("中継点追加").clicked() {
+            if ui
+                .button(aviutl2::config::translate("中継点追加"))
+                .clicked()
+            {
                 *selected_point = Self::insert_timecontrol_point(
                     timecontrol,
                     context_menu_position.unwrap_or([0.5, 0.5]),

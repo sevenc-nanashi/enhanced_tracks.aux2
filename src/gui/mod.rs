@@ -292,7 +292,7 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
                     });
                 }
             } else {
-                ui.label("Initializing...");
+                ui.label(aviutl2::config::translate("Initializing..."));
             }
         });
     }
@@ -347,7 +347,7 @@ impl KeyframesGui {
 
         let mut layout = egui::text::LayoutJob::default();
         layout.append(
-            "一時停止中\n",
+            &format!("{}\n", aviutl2::config::translate("一時停止中")),
             0.0,
             egui::TextFormat {
                 font_id: egui::FontId::proportional(18.0),
@@ -356,7 +356,9 @@ impl KeyframesGui {
             },
         );
         layout.append(
-            "Undoを妨げないために同期を中断しています。クリックで再同期します。",
+            &aviutl2::config::translate(
+                "Undoを妨げないために同期を中断しています。クリックで再同期します。",
+            ),
             0.0,
             egui::TextFormat {
                 font_id: egui::FontId::default(),
@@ -450,7 +452,7 @@ impl KeyframesGui {
             effects.push(effect_info);
         }
 
-        let mut object_name = read.get_object_name(selected_object)?.unwrap_or_else(|| {
+        let raw_object_name = read.get_object_name(selected_object)?.unwrap_or_else(|| {
             effects
                 .iter()
                 .find(|e| e.effect_type != EffectType::Control)
@@ -463,9 +465,15 @@ impl KeyframesGui {
                 .get(&e.name)
                 .is_some_and(|e| e.effect_type == aviutl2::generic::EffectType::Output)
         });
-        if let Some(output) = output {
-            object_name = format!("{} [{}]", object_name, output.name);
-        }
+        let object_name = if let Some(output_effect) = output {
+            format!(
+                "{} [{}]",
+                crate::utils::get_translated_effect_name(&raw_object_name),
+                crate::utils::get_translated_effect_name(&output_effect.name)
+            )
+        } else {
+            crate::utils::get_translated_effect_name(&raw_object_name)
+        };
 
         // 出力制御は上に持っていく
         effects.sort_by_key(|e| {

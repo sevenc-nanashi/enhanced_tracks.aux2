@@ -18,7 +18,7 @@ impl AsRef<str> for EasingSearchItem<'_> {
 impl KeyframesGui {
     pub fn render_selected_object_info(&mut self, ui: &mut egui::Ui) {
         let Some(selected_object_info) = self.selected_object_info.clone() else {
-            ui.label("No object selected");
+            ui.label(aviutl2::config::translate("No object selected"));
             return;
         };
         // ui.label(format!("Selected Object: {}", selected_object_info.name));
@@ -63,17 +63,19 @@ impl KeyframesGui {
         object: &SelectedObjectInfo,
         effect: &EffectInfo,
     ) {
-        egui::containers::CollapsingHeader::new(&effect.name)
-            .id_salt((effect.index, &effect.name))
-            .enabled(!effect.keyframe_tracks.is_empty())
-            .open(effect.keyframe_tracks.is_empty().then_some(false))
-            .show(ui, |ui| {
-                for (params, track) in &effect.keyframe_tracks {
-                    ui.push_id(&track.names, |ui| {
-                        self.render_keyframe_track_info(ui, info, object, effect, params, track);
-                    });
-                }
-            });
+        egui::containers::CollapsingHeader::new(crate::utils::get_translated_effect_name(
+            &effect.name,
+        ))
+        .id_salt((effect.index, &effect.name))
+        .enabled(!effect.keyframe_tracks.is_empty())
+        .open(effect.keyframe_tracks.is_empty().then_some(false))
+        .show(ui, |ui| {
+            for (params, track) in &effect.keyframe_tracks {
+                ui.push_id(&track.names, |ui| {
+                    self.render_keyframe_track_info(ui, info, object, effect, params, track);
+                });
+            }
+        });
     }
 
     fn render_keyframe_track_info(
@@ -89,7 +91,10 @@ impl KeyframesGui {
             for name in &track.names {
                 ui.menu_button(name, |ui| {
                     if ui
-                        .add_enabled(track.names.len() > 1, egui::Button::new("分離"))
+                        .add_enabled(
+                            track.names.len() > 1,
+                            egui::Button::new(aviutl2::config::translate("分離")),
+                        )
                         .clicked()
                     {
                         self.detach_keyframe_track(object, effect, params, track, name);
@@ -406,9 +411,12 @@ impl KeyframesGui {
                         .get(&easing.easing)
                         .is_some_and(|e| e.has_timecontrol)
                     {
-                        format!("🕒 {}", easing.easing)
+                        format!(
+                            "🕒 {}",
+                            crate::utils::get_translated_effect_name(&easing.easing)
+                        )
                     } else {
-                        easing.easing.clone()
+                        crate::utils::get_translated_effect_name(&easing.easing)
                     }
                 }
                 crate::keyframe::Keyframe::Midpoint => "〃".to_string(),
@@ -611,20 +619,20 @@ impl KeyframesGui {
                 );
             }
         });
-        ui.menu_button("移動方法", |ui| {
+        ui.menu_button(aviutl2::config::translate("移動方法"), |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let edit = ui.add(
                     egui::TextEdit::singleline(&mut self.easing_search_text)
                         .margin(egui::Margin::symmetric(4, 0))
-                        .hint_text("検索"),
+                        .hint_text(aviutl2::config::translate("検索")),
                 );
                 if ui
                     .add_enabled(
                         !self.easing_search_text.is_empty(),
                         egui::Button::new("×").min_size(egui::Vec2::splat(edit.rect.height())),
                     )
-                    .on_hover_text("検索をクリア")
+                    .on_hover_text(aviutl2::config::translate("検索をクリア"))
                     .clicked()
                 {
                     self.easing_search_text.clear();
@@ -657,10 +665,12 @@ impl KeyframesGui {
         }
 
         if ui
-            .add(egui::Button::new("中間点").selected(matches!(
-                keyframes.keyframes[index],
-                crate::keyframe::Keyframe::Midpoint
-            )))
+            .add(
+                egui::Button::new(aviutl2::config::translate("中間点")).selected(matches!(
+                    keyframes.keyframes[index],
+                    crate::keyframe::Keyframe::Midpoint
+                )),
+            )
             .clicked()
         {
             let mut new_keyframes = keyframes.clone();
@@ -668,10 +678,12 @@ impl KeyframesGui {
             update_keyframe(new_keyframes);
         }
         if ui
-            .add(egui::Button::new("継続").selected(matches!(
-                keyframes.keyframes[index],
-                crate::keyframe::Keyframe::Ignored
-            )))
+            .add(
+                egui::Button::new(aviutl2::config::translate("継続")).selected(matches!(
+                    keyframes.keyframes[index],
+                    crate::keyframe::Keyframe::Ignored
+                )),
+            )
             .clicked()
         {
             let mut new_keyframes = keyframes.clone();
@@ -717,7 +729,7 @@ impl KeyframesGui {
             update_keyframe,
         );
         if current_easing.has_timecontrol {
-            if ui.button("時間制御").clicked() {
+            if ui.button(aviutl2::config::translate("時間制御")).clicked() {
                 self.open_timecontrol_editor(
                     params,
                     object,
@@ -772,6 +784,10 @@ impl KeyframesGui {
                 .unwrap_or_else(|| Self::format_easing_param_value(current_value));
 
             ui.horizontal(|ui| {
+                let param_name = crate::utils::get_translated_effect_param_name(
+                    &current_easing.name,
+                    param_name,
+                );
                 ui.label(format!("{param_name}："));
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut value)
@@ -851,7 +867,13 @@ impl KeyframesGui {
         update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
     ) {
         let mut current_acceleration = current_keyframe.acceleration;
-        if ui.checkbox(&mut current_acceleration, "加速").changed() {
+        if ui
+            .checkbox(
+                &mut current_acceleration,
+                aviutl2::config::translate("加速"),
+            )
+            .changed()
+        {
             let mut new_keyframes = keyframes.clone();
             let crate::keyframe::Keyframe::Easing(ref mut k) =
                 new_keyframes.keyframes[keyframe_index]
@@ -863,7 +885,13 @@ impl KeyframesGui {
         }
 
         let mut current_deceleration = current_keyframe.deceleration;
-        if ui.checkbox(&mut current_deceleration, "減速").changed() {
+        if ui
+            .checkbox(
+                &mut current_deceleration,
+                aviutl2::config::translate("減速"),
+            )
+            .changed()
+        {
             let mut new_keyframes = keyframes.clone();
             let crate::keyframe::Keyframe::Easing(ref mut k) =
                 new_keyframes.keyframes[keyframe_index]
@@ -905,7 +933,7 @@ impl KeyframesGui {
         let mut matches = pattern.match_list(items, &mut matcher);
         matches.sort_by_key(|(item, score)| (std::cmp::Reverse(*score), item.easing.name.clone()));
         if matches.is_empty() {
-            ui.label("見つかりませんでした");
+            ui.label(aviutl2::config::translate("見つかりませんでした"));
             return;
         }
         for (item, _) in matches.into_iter().take(100) {
@@ -929,10 +957,14 @@ impl KeyframesGui {
         update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
     ) {
         if ui
-            .add(egui::Button::new(&easing.name).selected(matches!(
+            .add(
+                egui::Button::new(crate::utils::get_translated_effect_name(&easing.name)).selected(
+                    matches!(
                 keyframes.keyframes[index],
                 crate::keyframe::Keyframe::Easing(ref k)
-                if k.easing == easing.name)))
+                if k.easing == easing.name),
+                ),
+            )
             .clicked()
         {
             let new_keyframes = Self::keyframes_with_easing(keyframes, index, easing);

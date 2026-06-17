@@ -53,22 +53,29 @@ impl KeyframesGui {
 
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            if ui.button("戻る").clicked() {
+            if ui.button(aviutl2::config::translate("戻る")).clicked() {
                 self.timecontrol_editor = None;
             }
             ui.label(format!(
-                "時間制御：{} / {} / {}",
-                target.effect_name,
+                "{}{} / {} / {}",
+                aviutl2::config::translate("時間制御："),
+                crate::utils::get_translated_effect_name(&target.effect_name),
                 if target.track_names.len() == 1 {
-                    target.track_names[0].clone()
+                    crate::utils::get_translated_effect_param_name(
+                        &target.effect_name,
+                        &target.track_names[0],
+                    )
                 } else {
                     format!(
                         "{} + {}",
-                        target.track_names[0],
+                        crate::utils::get_translated_effect_param_name(
+                            &target.effect_name,
+                            &target.track_names[0]
+                        ),
                         target.track_names.len() - 1
                     )
                 },
-                easing_name
+                crate::utils::get_translated_effect_name(&easing_name)
             ));
         });
         ui.separator();

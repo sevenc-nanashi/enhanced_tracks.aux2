@@ -27,9 +27,19 @@ build = ["aulua build", "cargo build"]
 source = "target/release/enhanced_tracks_aux2.dll"
 build = ["aulua build", "cargo build --release"]
 
+[artifacts.enhanced_tracks_aux2-aul2]
+destination = "Language/English.enhanced_tracks-aux2.aul2"
+source = "i18n/English.aul2"
+
 [development]
 aviutl2_version = "latest"
-catalog_dependencies = ["KuroNeko.CopyAlias", "sigma-axis.Basic_S", "sevenc-nanashi.insert-aux2"]
+catalog_dependencies = [
+  "KuroNeko.CopyAlias",
+  "sigma-axis.Basic_S",
+  "sevenc-nanashi.insert-aux2",
+  "sigma-axis.translations_sigma-axis",
+  "aviutl2-community.aviutl2_community_translation_companion"
+]
 
 [release]
 package_template = "./release/package.txt"
