@@ -1,4 +1,5 @@
 use anyhow::Context;
+use aviutl2::generic::GenericPlugin;
 use aviutl2_eframe::{eframe, egui};
 use tap::prelude::*;
 
@@ -341,6 +342,9 @@ impl KeyframesGui {
         if response.clicked() {
             let mut resolved_migrations = crate::watcher::RESOLVED_MIGRATIONS.lock().unwrap();
             resolved_migrations.clear();
+            crate::KeyframesAux2::with_instance(|aux| {
+                aux.watcher.notify_continue_sync();
+            });
         }
 
         let color = GUI_COLORS.log_warn;

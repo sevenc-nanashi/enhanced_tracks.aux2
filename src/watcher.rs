@@ -7,6 +7,7 @@ pub static RESOLVED_MIGRATIONS: std::sync::LazyLock<
 #[derive(Debug)]
 pub enum WatcherMessage {
     ObjectChanged,
+    ContinueSync,
     Shutdown,
 }
 
@@ -23,7 +24,9 @@ impl WatcherThread {
             while let Ok(message) = receiver.recv() {
                 tracing::trace!("Watcher thread received message: {:?}", message);
                 match message {
-                    WatcherMessage::ObjectChanged => on_object_change(),
+                    WatcherMessage::ObjectChanged | WatcherMessage::ContinueSync => {
+                        refresh_bindings()
+                    }
                     WatcherMessage::Shutdown => break,
                 }
             }
@@ -42,6 +45,14 @@ impl WatcherThread {
             );
         }
     }
+    pub fn notify_continue_sync(&self) {
+        if let Err(e) = self.sender.send(WatcherMessage::ContinueSync) {
+            tracing::error!(
+                "Failed to send continue sync message to watcher thread: {:?}",
+                e
+            );
+        }
+    }
 }
 impl Drop for WatcherThread {
     fn drop(&mut self) {
@@ -56,7 +67,7 @@ impl Drop for WatcherThread {
     }
 }
 
-pub fn on_object_change() {
+pub fn refresh_bindings() {
     let update_bindings = crate::EDIT_HANDLE
         .call_read_section(update_keyframe_bindings)
         .map_err(anyhow::Error::from)
