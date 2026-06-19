@@ -621,8 +621,11 @@ impl KeyframesGui {
         });
         ui.menu_button(aviutl2::config::translate("移動方法"), |ui| {
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                let edit = ui.add(
+                let height = ui.text_style_height(&egui::TextStyle::Button);
+                ui.spacing_mut().item_spacing.x = 4.0;
+
+                ui.add_sized(
+                    egui::Vec2::new(ui.available_width() - height - 4.0, height),
                     egui::TextEdit::singleline(&mut self.easing_search_text)
                         .margin(egui::Margin::symmetric(4, 0))
                         .hint_text(aviutl2::config::translate("検索")),
@@ -630,7 +633,7 @@ impl KeyframesGui {
                 if ui
                     .add_enabled(
                         !self.easing_search_text.is_empty(),
-                        egui::Button::new("×").min_size(egui::Vec2::splat(edit.rect.height())),
+                        egui::Button::new("×").min_size(egui::Vec2::splat(height)),
                     )
                     .on_hover_text(aviutl2::config::translate("検索をクリア"))
                     .clicked()
