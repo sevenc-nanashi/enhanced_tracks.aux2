@@ -972,6 +972,7 @@ impl KeyframesGui {
         {
             let new_keyframes = Self::keyframes_with_easing(keyframes, index, easing);
             update_keyframe(new_keyframes);
+            ui.close();
         }
     }
 

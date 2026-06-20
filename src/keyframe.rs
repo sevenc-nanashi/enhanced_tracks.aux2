@@ -1069,13 +1069,13 @@ impl Easing {
                 easing.has_timecontrol = true;
             }
             if let Some((_, param_name, param_value)) =
-                lazy_regex::regex_captures!(r"--param:([^,]+),(\d*\.?\d+)", line.trim())
+                lazy_regex::regex_captures!(r"--param:([^,]+),(-?\d*\.?\d+)", line.trim())
             {
                 let param_value: f64 = param_value.parse().unwrap_or(0.0);
                 easing.params.insert(param_name.to_string(), param_value);
             }
             if let Some((_, param_captures)) =
-                lazy_regex::regex_captures!(r"--param:(\d*\.?\d+)", line.trim())
+                lazy_regex::regex_captures!(r"--param:(-?\d*\.?\d+)", line.trim())
             {
                 let param_value: f64 = param_captures.parse().unwrap_or(0.0);
                 easing.params.insert("設定値".to_string(), param_value);
