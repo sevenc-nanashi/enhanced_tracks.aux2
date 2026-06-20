@@ -19,8 +19,8 @@ local function smooth_edge_value(start_value, end_value, t, is_first_edge, is_la
 	end
 
 	local average = (start_value + end_value) * HALF
-	local left = is_first_edge and average or start_value
-	local right = is_last_edge and average or end_value
+	local left = is_first_edge and start_value or (is_last_edge and average or start_value)
+	local right = is_last_edge and end_value or (is_first_edge and average or end_value)
 	local s = 1.0 - t
 
 	return (left * t * 3.0 + s * start_value) * s * s + (right * s * 3.0 + t * end_value) * t * t
