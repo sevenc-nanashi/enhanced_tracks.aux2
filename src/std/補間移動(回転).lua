@@ -1,7 +1,6 @@
 --speed:0,0
 
----$embed
-local curves = require("common")
+local curves = obj.module("enhanced_tracks.aux2")
 
 local EPS = 1.0e-12
 local ROTATION_CONTROL_BLEND = 0.42500001192092896
@@ -105,19 +104,18 @@ local function rotation_interpolation_value(values, lengths, segment, ratio, dou
 		lengths,
 		segment,
 		ratio,
-		nil,
 		double_first,
 		double_last
 	)
 end
 
 local function interpolation_rotate_group_value(axes, segment, ratio, axis_index)
-	segment, ratio = curves.resolve_segment(#axes[1], segment, ratio, nil)
-	local q_prev = curves.euler_quat_at(axes, segment, "xyz")
-	local q_cur = curves.euler_quat_at(axes, segment + 1, "xyz")
-	local q_next = quat_align(q_cur, curves.euler_quat_at(axes, segment + 2, "xyz"))
+	segment, ratio = curves.resolve_segment(#axes[1], segment, ratio)
+	local q_prev = curves.euler_quat_at(axes[1], axes[2], axes[3], segment, "xyz")
+	local q_cur = curves.euler_quat_at(axes[1], axes[2], axes[3], segment + 1, "xyz")
+	local q_next = quat_align(q_cur, curves.euler_quat_at(axes[1], axes[2], axes[3], segment + 2, "xyz"))
 	q_prev = quat_align(q_cur, q_prev)
-	local q_after = quat_align(q_next, curves.euler_quat_at(axes, segment + 3, "xyz"))
+	local q_after = quat_align(q_next, curves.euler_quat_at(axes[1], axes[2], axes[3], segment + 3, "xyz"))
 
 	local control_cur = quat_squad_control(q_prev, q_cur, q_next)
 	local control_next = quat_squad_control(q_cur, q_next, q_after)
@@ -152,11 +150,21 @@ if link_count > 1 then
 	end
 end
 
-local rotation_group = curves.rotation_axes(linked_values)
+local rotation_group = nil
+if linked_values and #linked_values == 3 then
+	rotation_group = linked_values
+end
 if rotation_group then
 	return interpolation_rotate_group_value(rotation_group, index, ratio, link_index + 1)
 end
 
-local axes = curves.collect_axes(values, linked_values)
-local lengths = curves.segment_lengths(axes, obj.getpoint("accelerate"), obj.getpoint("decelerate"))
+local axis1 = values
+local axis2 = {}
+local axis3 = {}
+if linked_values then
+	axis1 = linked_values[1]
+	axis2 = linked_values[2] or {}
+	axis3 = linked_values[3] or {}
+end
+local lengths = curves.segment_lengths(axis1, axis2, axis3, obj.getpoint("accelerate"), obj.getpoint("decelerate"))
 return rotation_interpolation_value(values, lengths, index, ratio, obj.getpoint("accelerate"), obj.getpoint("decelerate"))

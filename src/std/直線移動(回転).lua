@@ -1,7 +1,6 @@
 --speed:0,0
 
----$embed
-local curves = require("common")
+local curves = obj.module("enhanced_tracks.aux2")
 
 local function smooth_edge_value(start_value, end_value, t, is_first_edge, is_last_edge)
 	if not is_first_edge and not is_last_edge then
@@ -17,11 +16,11 @@ local function smooth_edge_value(start_value, end_value, t, is_first_edge, is_la
 end
 
 local function rotation_linear_value(values, segment, ratio, double_first, double_last)
-	return curves.linear_value(curves.build_rotation_series(values, 360.0), segment, ratio, nil, double_first, double_last)
+	return curves.linear_value(curves.build_rotation_series(values, 360.0), segment, ratio, double_first, double_last)
 end
 
 local function linear_rotate_group_value(axes, segment, ratio, axis_index, double_first, double_last)
-	segment, ratio = curves.resolve_segment(#axes[1], segment, ratio, nil)
+	segment, ratio = curves.resolve_segment(#axes[1], segment, ratio)
 	local smooth_t = smooth_edge_value(
 		0.0,
 		1.0,
@@ -29,8 +28,8 @@ local function linear_rotate_group_value(axes, segment, ratio, axis_index, doubl
 		double_first and segment == 0,
 		double_last and segment == #axes[1] - 2
 	)
-	local q0 = curves.euler_quat_at(axes, segment + 1, "xyz")
-	local q1 = curves.euler_quat_at(axes, segment + 2, "xyz")
+	local q0 = curves.euler_quat_at(axes[1], axes[2], axes[3], segment + 1, "xyz")
+	local q1 = curves.euler_quat_at(axes[1], axes[2], axes[3], segment + 2, "xyz")
 	return curves.rotation_component_from_quat(axis_index, "xyz", curves.quat_slerp(q0, q1, smooth_t))
 end
 
@@ -57,7 +56,10 @@ if link_count > 1 then
 	end
 end
 
-local axes = curves.rotation_axes(linked_values)
+local axes = nil
+if linked_values and #linked_values == 3 then
+	axes = linked_values
+end
 if axes then
 	return linear_rotate_group_value(axes, index, ratio, link_index + 1, obj.getpoint("accelerate"), obj.getpoint("decelerate"))
 end

@@ -1,8 +1,7 @@
 --speed:0,0
 --timecontrol
 
----$embed
-local curves = require("common")
+local curves = obj.module("enhanced_tracks.aux2")
 
 local index, ratio = math.modf(obj.getpoint("timecontrol", "index"))
 local num = obj.getpoint("num")
@@ -11,4 +10,4 @@ for i = 0, num - 1 do
 	values[i + 1] = obj.getpoint(i)
 end
 
-return curves.linear_value(values, index, ratio, nil, obj.getpoint("accelerate"), obj.getpoint("decelerate"))
+return curves.linear_value(values, index, ratio, obj.getpoint("accelerate"), obj.getpoint("decelerate"))

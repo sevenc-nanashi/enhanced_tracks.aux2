@@ -1,7 +1,6 @@
 --speed:0,0
 
----$embed
-local curves = require("common")
+local curves = obj.module("enhanced_tracks.aux2")
 
 local RAND_MAX = 2147483647
 
@@ -18,7 +17,7 @@ local function random_move_value(values, index, ratio)
 		return values[1]
 	end
 
-	local segment, t = curves.resolve_segment(#values, index, ratio, nil)
+	local segment, t = curves.resolve_segment(#values, index, ratio)
 	local base = values[1]
 	local span = values[#values] - base
 	local seed = 0

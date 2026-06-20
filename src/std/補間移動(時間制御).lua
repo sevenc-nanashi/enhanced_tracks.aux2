@@ -1,8 +1,7 @@
 --speed:0,0
 --timecontrol
 
----$embed
-local curves = require("common")
+local curves = obj.module("enhanced_tracks.aux2")
 
 local num = obj.getpoint("num")
 local values = {}
@@ -32,15 +31,21 @@ if ok and timecontrol_value then
 	t = timecontrol_value
 end
 
-local axes = curves.collect_axes(values, linked_values)
-local segment, local_t, lengths = curves.weighted_segment(axes, t, obj.getpoint("accelerate"), obj.getpoint("decelerate"))
+local axis1 = values
+local axis2 = {}
+local axis3 = {}
+if linked_values then
+	axis1 = linked_values[1]
+	axis2 = linked_values[2] or {}
+	axis3 = linked_values[3] or {}
+end
+local segment, local_t, lengths = curves.weighted_segment(axis1, axis2, axis3, t, obj.getpoint("accelerate"), obj.getpoint("decelerate"))
 
 return curves.interpolation_value(
 	values,
 	lengths,
 	segment,
 	local_t,
-	nil,
 	obj.getpoint("accelerate"),
 	obj.getpoint("decelerate")
 )

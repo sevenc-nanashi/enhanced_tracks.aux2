@@ -6,6 +6,7 @@ use lazy_regex::regex;
 mod gui;
 mod keyframe;
 mod module;
+mod std_common;
 mod utils;
 mod watcher;
 
