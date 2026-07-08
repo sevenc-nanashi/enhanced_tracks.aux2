@@ -147,64 +147,84 @@ else
     end
   end
 
-  local function module_env_with_inner_obj(env, env_cache)
-    if env == inner_G then
-      return inner_G
-    end
-    if env_cache[env] then
-      return env_cache[env]
+  local function require_with_env(name, env)
+    if package.loaded[name] ~= nil then
+      return package.loaded[name]
     end
 
-    local replaced_env = {}
-    setmetatable(replaced_env, {
-      __index = function(_, key)
-        if key == "obj" then
-          return inner_obj
+    local errors = {}
+
+    for _, loader in ipairs(package.loaders) do
+      local f, extra = loader(name)
+
+      if type(f) == "function" then
+        setfenv(f, env)
+
+        local result = f(name, extra)
+
+        if result ~= nil then
+          package.loaded[name] = result
+        elseif package.loaded[name] == nil then
+          package.loaded[name] = true
         end
-        return env[key]
-      end,
-      __newindex = env,
-    })
-    env_cache[env] = replaced_env
-    return replaced_env
-  end
 
-  local function replace_obj_in_loaded_module(module, seen, env_cache)
-    if type(module) == "function" then
-      local ok, env = pcall(getfenv, module)
-      if ok and type(env) == "table" then
-        pcall(setfenv, module, module_env_with_inner_obj(env, env_cache))
+        return package.loaded[name]
+      elseif type(f) == "string" then
+        errors[#errors + 1] = f
       end
-      return
-    end
-    if type(module) ~= "table" then
-      return
     end
 
-    if seen[module] then
-      return
-    end
-    seen[module] = true
-
-    for _, value in pairs(module) do
-      replace_obj_in_loaded_module(value, seen, env_cache)
-    end
+    error("module '" .. name .. "' not found:" .. table.concat(errors))
   end
 
   inner_G.require = function(name)
+    if name == "enhanced_tracks.aux2" or name == "ffi" or name == "bit" or name == "bit32" or name == "math" or name == "table" or name == "string" or name == "os" or name == "io" or name == "coroutine" or name == "package" then
+      return require(name)
+    end
+
     local loader_prefix
     if #o_script_dir > 0 then
       loader_prefix = o_script_dir .. "/?.lua;" .. o_script_dir .. "/?.dll;"
       package.path = loader_prefix .. package.path
     end
-    local ok, result = pcall(require, name)
+    if package.loaded[name] then
+      local result = package.loaded[name]
+      if
+          (type(result) == "table" and
+            result["__enhanced_tracks_patched"]) or (
+            type(result) == "function" and getfenv(result)["__enhanced_tracks_patched"]
+          )
+      then
+        return result
+      end
+      print("@info", "Module '" .. name .. "' is already loaded, but not patched for enhanced tracks. Reloading...")
+      package.loaded[name] = nil
+    end
+    print("@info", "Requiring module '" .. name .. "' for enhanced tracks")
+
+    -- require内でのobjとかを置き換えるのは多分これが一番手っ取り早いはず...
+    local ok, result = pcall(require_with_env, name, inner_G)
+
     if #o_script_dir > 0 then
       package.path = package.path:sub(#loader_prefix + 1)
     end
     if not ok then
       error("Failed to require module '" .. name .. "': " .. tostring(result))
     end
-    replace_obj_in_loaded_module(result, {}, {})
+    if type(result) == "table" then
+      result["__enhanced_tracks_patched"] = true
+      for k, v in pairs(result) do
+        if type(v) == "function" then
+          setfenv(v, inner_G)
+        end
+      end
+      package.loaded[name] = result
+    elseif type(result) == "function" then
+      local env = getfenv(result)
+      env["__enhanced_tracks_patched"] = true
+      setfenv(result, env)
+      package.loaded[name] = result
+    end
     return result
   end
 
