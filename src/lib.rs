@@ -135,6 +135,11 @@ impl KeyframeTrackParams {
         let current_params = effect
             .get_track_info(track_name)
             .context("Failed to get current track info")?;
+        tracing::debug!(
+            "Current track info for {}: {:?}",
+            track_name,
+            current_params
+        );
         let current_track = effect.get_item_value(track_name)?;
         let track_alias_param = format!(
             "{},{},{},{}",

@@ -77,9 +77,9 @@ impl KeyframesGui {
         .enabled(!effect.keyframe_tracks.is_empty())
         .open(effect.keyframe_tracks.is_empty().then_some(false))
         .show(ui, |ui| {
-            for (params, track) in &effect.keyframe_tracks {
+            for track in effect.keyframe_tracks.values() {
                 ui.push_id(&track.names, |ui| {
-                    self.render_keyframe_track_info(ui, info, object, effect, params, track);
+                    self.render_keyframe_track_info(ui, info, object, effect, &track.params, track);
                 });
             }
         });
@@ -691,6 +691,14 @@ impl KeyframesGui {
                     crate::KEYFRAMES.insert(new_params, keyframes);
                 }
                 new_params.set_params(edit, effect.handle, name)?;
+
+                // グループ化解除
+                if let Some(group_name) = edit
+                    .get_effect_track_info(effect.handle, name)?
+                    .and_then(|t| t.group_name)
+                {
+                    edit.set_effect_item_value(effect.handle, &group_name, "0")?;
+                }
                 anyhow::Ok(())
             })
             .map_err(anyhow::Error::from)

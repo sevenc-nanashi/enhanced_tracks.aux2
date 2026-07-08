@@ -78,7 +78,7 @@ impl KeyframesGui {
                 }
             } else if scroll_delta.abs() > f64::EPSILON && rect.height() > f32::EPSILON {
                 let scroll_y =
-                    -scroll_delta / rect.height() as f64 * current_visible_y_bounds.y_range();
+                    scroll_delta / rect.height() as f64 * current_visible_y_bounds.y_range();
                 current_visible_y_bounds = current_visible_y_bounds
                     .translate(scroll_y)
                     .clamp_to_content(vertical_bounds);

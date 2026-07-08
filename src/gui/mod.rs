@@ -183,11 +183,12 @@ pub struct EffectInfo {
     pub handle: aviutl2::generic::EffectHandle,
     pub name: String,
     pub effect_type: EffectType,
-    pub keyframe_tracks: indexmap::IndexMap<crate::KeyframeTrackParams, KeyframeTrackInfo>,
+    pub keyframe_tracks: indexmap::IndexMap<String, KeyframeTrackInfo>,
 }
 
 #[derive(Debug, Clone)]
 pub struct KeyframeTrackInfo {
+    pub params: crate::KeyframeTrackParams,
     pub names: Vec<String>,
 }
 
@@ -381,10 +382,12 @@ impl KeyframesGui {
         };
 
         selected_object_info.effects.iter().any(|effect| {
-            effect.keyframe_tracks.keys().any(|params| {
-                crate::KEYFRAMES.get(params).is_some_and(|keyframes| {
-                    keyframes.keyframes.len() != selected_object_info.frames.len()
-                })
+            effect.keyframe_tracks.values().any(|params| {
+                crate::KEYFRAMES
+                    .get(&params.params)
+                    .is_some_and(|keyframes| {
+                        keyframes.keyframes.len() != selected_object_info.frames.len()
+                    })
             })
         })
     }
@@ -487,12 +490,38 @@ impl KeyframesGui {
                     //     params,
                     // };
                     // effect_info.keyframe_tracks.push(keyframe_info);
-                    effect_info
-                        .keyframe_tracks
-                        .entry(params)
-                        .or_insert_with(|| KeyframeTrackInfo { names: Vec::new() })
-                        .names
-                        .push(item.name.to_string());
+                    match read.get_effect_track_info(effect.handle, &item.name) {
+                        Ok(Some(track_info)) => {
+                            effect_info
+                                .keyframe_tracks
+                                .entry(
+                                    track_info
+                                        .group_name
+                                        .unwrap_or_else(|| item.name.to_owned()),
+                                )
+                                .or_insert_with(|| KeyframeTrackInfo {
+                                    params,
+                                    names: Vec::new(),
+                                })
+                                .names
+                                .push(item.name.to_string());
+                        }
+                        Ok(None) => {
+                            tracing::warn!(
+                                "Failed to get track info for effect {} item {}: track info is None",
+                                effect_name,
+                                item.name
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to get track info for effect {} item {}: {:?}",
+                                effect_name,
+                                item.name,
+                                e
+                            );
+                        }
+                    }
                 }
             })?;
             effects.push(effect_info);
