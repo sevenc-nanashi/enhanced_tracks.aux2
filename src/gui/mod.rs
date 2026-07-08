@@ -11,7 +11,59 @@ pub struct KeyframesGui {
     pub timecontrol_editor: Option<TimeControlEditorTarget>,
     pub timecontrol_clipboard: Option<crate::keyframe::TimeControl>,
     pub easing_search_text: String,
+    pub keyframe_timeline_view: KeyframeTimelineView,
     pub debug_counter: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct KeyframeTimelineView {
+    pub left: f32,
+    pub right: f32,
+}
+
+impl Default for KeyframeTimelineView {
+    fn default() -> Self {
+        Self {
+            left: 0.0,
+            right: 1.0,
+        }
+    }
+}
+
+impl KeyframeTimelineView {
+    fn width(self) -> f32 {
+        self.right - self.left
+    }
+
+    fn translate(self, delta: f32) -> Self {
+        Self {
+            left: self.left + delta,
+            right: self.right + delta,
+        }
+        .clamp()
+    }
+
+    fn zoom_at(self, anchor: f32, factor: f32) -> Self {
+        assert!(factor.is_finite());
+        let new_width = (self.width() / factor).clamp(0.01, 1.0);
+        let left = anchor - (anchor - self.left) / self.width() * new_width;
+        Self {
+            left,
+            right: left + new_width,
+        }
+        .clamp()
+    }
+
+    fn clamp(self) -> Self {
+        assert!(self.left.is_finite());
+        assert!(self.right.is_finite());
+        let width = self.width().clamp(0.01, 1.0);
+        let left = self.left.clamp(0.0, 1.0 - width);
+        Self {
+            left,
+            right: left + width,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -247,6 +299,7 @@ pub fn create_gui(
         timecontrol_editor: None,
         timecontrol_clipboard: None,
         easing_search_text: String::new(),
+        keyframe_timeline_view: KeyframeTimelineView::default(),
         debug_counter: 0,
     }))
 }

@@ -1,8 +1,10 @@
 #![allow(clippy::too_many_arguments)]
 use super::*;
 use aviutl2_eframe::egui;
+use egui::epaint::{Mesh, Shape};
 
 static SECTION_SEPARATOR_HITBOX_WEIGHT: f32 = 4.0;
+static KEYFRAME_TIMELINE_FADE_WIDTH: f32 = 24.0;
 
 struct EasingSearchItem<'a> {
     easing: &'a crate::keyframe::Easing,
@@ -24,6 +26,7 @@ impl KeyframesGui {
             return;
         };
         // ui.label(format!("Selected Object: {}", selected_object_info.name));
+        self.handle_keyframe_timeline_input(ui, ui.clip_rect());
         if ui
             .add(
                 egui::Label::new(
@@ -116,7 +119,8 @@ impl KeyframesGui {
             aviutl2_eframe::egui::Sense::hover(),
         );
         let (current_object_color, selected_object_color) = get_colors(&effect.effect_type);
-        let num_divisions = response.rect.width() as usize / 10;
+        let visible_width_ratio = self.keyframe_timeline_view.width();
+        let num_divisions = (response.rect.width() / visible_width_ratio) as usize / 10;
         if num_divisions == 0 {
             return;
         }
@@ -125,6 +129,7 @@ impl KeyframesGui {
         self.render_track_background(
             &painter,
             response.rect,
+            self.keyframe_timeline_view,
             &current_object_color,
             num_divisions,
         );
@@ -142,6 +147,7 @@ impl KeyframesGui {
             ui,
             &painter,
             response.rect,
+            self.keyframe_timeline_view,
             effect,
             params,
             track,
@@ -149,24 +155,96 @@ impl KeyframesGui {
             &sections,
             selected_object_color,
         );
-        self.render_easing_labels(ui, &painter, response.rect, object, keyframes, total_frames);
+        self.render_easing_labels(
+            ui,
+            &painter,
+            response.rect,
+            self.keyframe_timeline_view,
+            object,
+            keyframes,
+            total_frames,
+        );
         self.render_midpoint_lines(
             ui,
             &painter,
             response.rect,
+            self.keyframe_timeline_view,
             object,
             effect,
             track,
             keyframes,
             total_frames,
         );
-        self.render_frame_cursor(&painter, info, object, response.rect, total_frames);
+        self.render_frame_cursor(
+            &painter,
+            info,
+            object,
+            response.rect,
+            self.keyframe_timeline_view,
+            total_frames,
+        );
+        self.render_keyframe_timeline_edge_fades(
+            &painter,
+            response.rect,
+            self.keyframe_timeline_view,
+        );
+    }
+
+    fn handle_keyframe_timeline_input(&mut self, ui: &egui::Ui, input_rect: egui::Rect) {
+        let (scroll_delta, zoom_delta, modifiers, pointer_pos) = ui.input(|i| {
+            (
+                i.smooth_scroll_delta(),
+                i.zoom_delta(),
+                i.modifiers,
+                i.pointer.hover_pos(),
+            )
+        });
+        let Some(pointer_pos) = pointer_pos else {
+            return;
+        };
+        if !input_rect.contains(pointer_pos) {
+            return;
+        }
+
+        let mut view = self.keyframe_timeline_view;
+
+        if modifiers.ctrl {
+            let zoom_factor = if (zoom_delta - 1.0).abs() > f32::EPSILON {
+                zoom_delta
+            } else if scroll_delta.y.abs() > f32::EPSILON {
+                (scroll_delta.y * 0.01).exp()
+            } else {
+                1.0
+            };
+            if (zoom_factor - 1.0).abs() > f32::EPSILON {
+                let anchor_ratio =
+                    ((pointer_pos.x - input_rect.left()) / input_rect.width()).clamp(0.0, 1.0);
+                let anchor = view.left + anchor_ratio * view.width();
+                view = view.zoom_at(anchor, zoom_factor);
+            }
+        } else {
+            let scroll_x = if modifiers.shift {
+                if scroll_delta.y.abs() > f32::EPSILON {
+                    -scroll_delta.y
+                } else {
+                    -scroll_delta.x
+                }
+            } else {
+                scroll_delta.x
+            };
+            if scroll_x.abs() > f32::EPSILON && input_rect.width() > f32::EPSILON {
+                view = view.translate(scroll_x / input_rect.width() * view.width());
+            }
+        }
+
+        self.keyframe_timeline_view = view;
     }
 
     fn render_track_background(
         &self,
         painter: &egui::Painter,
         rect: egui::Rect,
+        view: KeyframeTimelineView,
         current_object_color: &[egui::Color32],
         num_divisions: usize,
     ) {
@@ -175,7 +253,7 @@ impl KeyframesGui {
             let mut section_rect = rect;
             section_rect.set_left(rect.left() + i as f32 * width_per_section);
             section_rect.set_right((section_rect.left() + width_per_section).min(rect.right()));
-            let position = i as f32 / num_divisions as f32;
+            let position = view.left + i as f32 / num_divisions as f32 * view.width();
             let color = current_object_color[position.floor() as usize].lerp_to_gamma(
                 current_object_color
                     [(position.ceil() as usize).min(current_object_color.len() - 1)],
@@ -187,6 +265,58 @@ impl KeyframesGui {
             }
             painter.rect_filled(section_rect, 0.0, color);
         }
+    }
+
+    fn render_keyframe_timeline_edge_fades(
+        &self,
+        painter: &egui::Painter,
+        rect: egui::Rect,
+        view: KeyframeTimelineView,
+    ) {
+        let fade_width = KEYFRAME_TIMELINE_FADE_WIDTH.min(rect.width() / 2.0);
+        if fade_width <= f32::EPSILON {
+            return;
+        }
+
+        if view.left > f32::EPSILON {
+            let fade_rect = egui::Rect::from_min_max(
+                rect.left_top(),
+                egui::pos2(rect.left() + fade_width, rect.bottom()),
+            );
+            Self::paint_horizontal_fade(painter, fade_rect, true);
+        }
+        if view.right < 1.0 - f32::EPSILON {
+            let fade_rect = egui::Rect::from_min_max(
+                egui::pos2(rect.right() - fade_width, rect.top()),
+                rect.right_bottom(),
+            );
+            Self::paint_horizontal_fade(painter, fade_rect, false);
+        }
+    }
+
+    fn paint_horizontal_fade(painter: &egui::Painter, rect: egui::Rect, from_left: bool) {
+        let background = GUI_COLORS.object_section_ignored;
+        let transparent = egui::Color32::from_rgba_unmultiplied(
+            background.r(),
+            background.g(),
+            background.b(),
+            0,
+        );
+        let (left_color, right_color) = if from_left {
+            (background, transparent)
+        } else {
+            (transparent, background)
+        };
+
+        let mut mesh = Mesh::default();
+        let idx = mesh.vertices.len() as u32;
+        mesh.colored_vertex(rect.left_top(), left_color);
+        mesh.colored_vertex(rect.right_top(), right_color);
+        mesh.colored_vertex(rect.left_bottom(), left_color);
+        mesh.colored_vertex(rect.right_bottom(), right_color);
+        mesh.add_triangle(idx, idx + 1, idx + 2);
+        mesh.add_triangle(idx + 2, idx + 1, idx + 3);
+        painter.add(Shape::mesh(mesh));
     }
 
     fn track_sections(object: &SelectedObjectInfo, total_frames: usize) -> Vec<(usize, f32, f32)> {
@@ -205,6 +335,7 @@ impl KeyframesGui {
         ui: &mut egui::Ui,
         painter: &egui::Painter,
         track_rect: egui::Rect,
+        view: KeyframeTimelineView,
         effect: &EffectInfo,
         params: &crate::KeyframeTrackParams,
         track: &KeyframeTrackInfo,
@@ -224,14 +355,20 @@ impl KeyframesGui {
                 kf_info = new_kf_info;
             }
 
-            let rect = Self::section_rect(track_rect, section.1, section.2);
+            let rect = Self::section_rect(track_rect, view, section.1, section.2);
+            let Some(clipped_rect) = Self::clip_rect_horizontally(rect, track_rect) else {
+                continue;
+            };
             let shrinked_rect = {
-                let mut rect2 = rect;
+                let mut rect2 = clipped_rect;
                 if i > 0 {
                     rect2.set_left(rect2.left() + SECTION_SEPARATOR_HITBOX_WEIGHT / 2.0);
                 }
                 if i < sections.len() - 1 {
                     rect2.set_right(rect2.right() - SECTION_SEPARATOR_HITBOX_WEIGHT / 2.0);
+                }
+                if !rect2.is_positive() {
+                    continue;
                 }
                 rect2
             };
@@ -243,7 +380,7 @@ impl KeyframesGui {
                 )
                 .on_hover_text(Self::easing_hover_text(kf_info));
             if response.hovered() {
-                painter.rect_filled(rect, 0.0, selected_object_color);
+                painter.rect_filled(clipped_rect, 0.0, selected_object_color);
             }
 
             if response.double_clicked()
@@ -307,11 +444,26 @@ impl KeyframesGui {
         });
     }
 
-    fn section_rect(track_rect: egui::Rect, left: f32, right: f32) -> egui::Rect {
+    fn section_rect(
+        track_rect: egui::Rect,
+        view: KeyframeTimelineView,
+        left: f32,
+        right: f32,
+    ) -> egui::Rect {
         let mut rect = track_rect;
-        rect.set_left(track_rect.left() + left * track_rect.width());
-        rect.set_right(track_rect.left() + right * track_rect.width());
+        rect.set_left(track_rect.left() + (left - view.left) / view.width() * track_rect.width());
+        rect.set_right(track_rect.left() + (right - view.left) / view.width() * track_rect.width());
         rect
+    }
+
+    fn clip_rect_horizontally(rect: egui::Rect, clip: egui::Rect) -> Option<egui::Rect> {
+        if rect.right() <= clip.left() || clip.right() <= rect.left() {
+            return None;
+        }
+        let mut clipped = rect;
+        clipped.set_left(clipped.left().max(clip.left()));
+        clipped.set_right(clipped.right().min(clip.right()));
+        Some(clipped)
     }
 
     fn easing_hover_text(kf_info: &crate::keyframe::EasingKeyframeInfo) -> String {
@@ -375,6 +527,7 @@ impl KeyframesGui {
         ui: &egui::Ui,
         painter: &egui::Painter,
         track_rect: egui::Rect,
+        view: KeyframeTimelineView,
         object: &SelectedObjectInfo,
         keyframes: &crate::keyframe::Keyframes,
         total_frames: usize,
@@ -405,7 +558,12 @@ impl KeyframesGui {
             let left_position = (*frame - object.frames[0]) as f32 / total_frames as f32;
             let right_position =
                 (object.frames[i + 1] - object.frames[0]) as f32 / total_frames as f32;
-            let mut rect = Self::section_rect(track_rect, left_position, right_position);
+            let Some(mut rect) = Self::clip_rect_horizontally(
+                Self::section_rect(track_rect, view, left_position, right_position),
+                track_rect,
+            ) else {
+                continue;
+            };
             rect.set_left(rect.left() + ui.spacing().button_padding.x);
 
             let mut layout = egui::text::LayoutJob::default();
@@ -435,6 +593,7 @@ impl KeyframesGui {
         ui: &mut egui::Ui,
         painter: &egui::Painter,
         track_rect: egui::Rect,
+        view: KeyframeTimelineView,
         object: &SelectedObjectInfo,
         effect: &EffectInfo,
         track: &KeyframeTrackInfo,
@@ -446,8 +605,13 @@ impl KeyframesGui {
                 continue;
             }
             let position = (*frame - object.frames.first().unwrap()) as f32 / total_frames as f32;
+            if position < view.left || view.right < position {
+                continue;
+            }
             let mut rect = track_rect;
-            rect.set_left(rect.left() + position * track_rect.width() - 1.0);
+            rect.set_left(
+                rect.left() + (position - view.left) / view.width() * track_rect.width() - 1.0,
+            );
             rect.set_right(rect.left() + 1.0);
             let mut click_rect = rect;
             click_rect.set_left(click_rect.left() - SECTION_SEPARATOR_HITBOX_WEIGHT / 2.0);
@@ -489,6 +653,7 @@ impl KeyframesGui {
         info: &aviutl2::generic::EditInfo,
         object: &SelectedObjectInfo,
         track_rect: egui::Rect,
+        view: KeyframeTimelineView,
         total_frames: usize,
     ) {
         if *object.frames.first().unwrap() <= info.frame
@@ -496,8 +661,13 @@ impl KeyframesGui {
         {
             let position =
                 (info.frame - object.frames.first().unwrap()) as f32 / total_frames as f32;
+            if position < view.left || view.right < position {
+                return;
+            }
             let mut rect = track_rect;
-            rect.set_left(rect.left() + position * track_rect.width() - 1.0);
+            rect.set_left(
+                rect.left() + (position - view.left) / view.width() * track_rect.width() - 1.0,
+            );
             rect.set_right(rect.left() + 1.0);
             painter.rect_filled(rect, 0.0, GUI_COLORS.frame_cursor);
         }
