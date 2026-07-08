@@ -61,7 +61,7 @@ impl KeyframesGui {
                         "{} ({}f - {}f)",
                         selected_object_info.name,
                         selected_object_info.frames[0] + 1,
-                        selected_object_info.frames.last().unwrap() + 1
+                        selected_object_info.frames.last().unwrap()
                     ))
                     .color(
                         if crate::module::DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed) {
