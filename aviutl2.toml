@@ -38,7 +38,9 @@ catalog_dependencies = [
   "sigma-axis.Basic_S",
   "sevenc-nanashi.insert-aux2",
   "sigma-axis.translations_sigma-axis",
-  "aviutl2-community.aviutl2_community_translation_companion"
+  "aviutl2-community.aviutl2_community_translation_companion",
+  "Mr-Ojii.L-SMASH-Works",
+  "korarei.FlowType_K"
 ]
 
 [release]

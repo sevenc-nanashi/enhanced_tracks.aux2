@@ -18,7 +18,9 @@ impl AsRef<str> for EasingSearchItem<'_> {
 impl KeyframesGui {
     pub fn render_selected_object_info(&mut self, ui: &mut egui::Ui) {
         let Some(selected_object_info) = self.selected_object_info.clone() else {
-            ui.label(aviutl2::config::translate("オブジェクトが選択されていません"));
+            ui.label(aviutl2::config::translate(
+                "オブジェクトが選択されていません",
+            ));
             return;
         };
         // ui.label(format!("Selected Object: {}", selected_object_info.name));
@@ -91,17 +93,20 @@ impl KeyframesGui {
     ) {
         ui.horizontal_wrapped(|ui| {
             for name in &track.names {
-                ui.menu_button(name, |ui| {
-                    if ui
-                        .add_enabled(
-                            track.names.len() > 1,
-                            egui::Button::new(aviutl2::config::translate("分離")),
-                        )
-                        .clicked()
-                    {
-                        self.detach_keyframe_track(object, effect, params, track, name);
-                    }
-                });
+                ui.menu_button(
+                    crate::utils::get_translated_effect_param_name(&effect.name, name),
+                    |ui| {
+                        if ui
+                            .add_enabled(
+                                track.names.len() > 1,
+                                egui::Button::new(aviutl2::config::translate("分離")),
+                            )
+                            .clicked()
+                        {
+                            self.detach_keyframe_track(object, effect, params, track, name);
+                        }
+                    },
+                );
             }
         });
         let (response, painter) = ui.allocate_painter(
