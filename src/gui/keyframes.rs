@@ -21,8 +21,35 @@ impl KeyframesGui {
     pub fn render_selected_object_info(&mut self, ui: &mut egui::Ui) {
         let Some(selected_object_info) = self.selected_object_info.clone() else {
             ui.label(aviutl2::config::translate(
-                "オブジェクトが選択されていません",
+                "オブジェクトが選択されていません。",
             ));
+            ui.separator();
+
+            ui.horizontal_wrapped(|ui| {
+                ui.hyperlink_to(
+                    egui::RichText::new("enhanced_tracks.aux2").size(20.0),
+                    "https://github.com/sevenc-nanashi/enhanced_tracks.aux2",
+                );
+                ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.label("developed by ");
+                ui.hyperlink_to(
+                    egui::RichText::new("Nanashi.")
+                        .color(egui::Color32::from_rgb(0x48, 0xb0, 0xd5)),
+                    "https://sevenc7c.com",
+                );
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.label("powered by ");
+                ui.hyperlink_to(
+                    egui::RichText::new("aviutl2-rs")
+                        .color(egui::Color32::from_rgb(0xf8, 0x52, 0x07)),
+                    "https://github.com/sevenc-nanashi/aviutl2-rs",
+                );
+            });
             return;
         };
         // ui.label(format!("Selected Object: {}", selected_object_info.name));

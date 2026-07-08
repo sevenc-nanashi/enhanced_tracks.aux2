@@ -1095,6 +1095,14 @@ impl KeyframesGui {
         if target.dirty {
             return Ok(());
         }
+        if !read.get_focused_object()?.is_some_and(|focused| {
+            read.get_effects(focused)
+                .is_ok_and(|effects| effects.contains(&target.effect))
+        }) {
+            tracing::info!("Time control editor target effect is not focused, closing editor");
+            self.timecontrol_editor = None;
+            return Ok(());
+        }
         let params = match crate::KeyframeTrackParams::parse(
             read,
             target.effect,
