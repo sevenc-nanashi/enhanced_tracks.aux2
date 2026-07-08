@@ -345,6 +345,7 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
                 tracing::error!("Failed to reload easings: {:?}", e);
             }
         }
+        crate::module::CACHE_CLEARED.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     fn event_update_object_info(&mut self) {

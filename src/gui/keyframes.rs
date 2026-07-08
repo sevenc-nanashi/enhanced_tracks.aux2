@@ -50,10 +50,12 @@ impl KeyframesGui {
                 crate::module::DEBUG_MODE.store(debug_mode, std::sync::atomic::Ordering::Relaxed);
             }
         }
-        let info = crate::EDIT_HANDLE.get_edit_info();
-        for effect in &selected_object_info.effects {
-            self.render_effect_info(ui, &info, &selected_object_info, effect);
-        }
+        ui.push_id(selected_object_info.handle, |ui| {
+            let info = crate::EDIT_HANDLE.get_edit_info();
+            for effect in &selected_object_info.effects {
+                self.render_effect_info(ui, &info, &selected_object_info, effect);
+            }
+        });
     }
 
     fn render_effect_info(
@@ -122,13 +124,10 @@ impl KeyframesGui {
             num_divisions,
         );
 
-        let Some(keyframes) = crate::KEYFRAMES
-            .get(params)
-            .map(|keyframes| keyframes.clone())
-        else {
-            self.render_frame_cursor(&painter, info, object, response.rect, total_frames);
-            return;
-        };
+        let keyframes = &crate::KEYFRAMES.get(params).map_or_else(
+            || crate::keyframe::Keyframes::new(object.frames.len()),
+            |keyframes| keyframes.clone(),
+        );
         let sections = Self::track_sections(object, total_frames);
         if sections.len() != keyframes.keyframes.len() - 1 {
             return;
@@ -142,18 +141,11 @@ impl KeyframesGui {
             effect,
             params,
             track,
-            &keyframes,
+            keyframes,
             &sections,
             selected_object_color,
         );
-        self.render_easing_labels(
-            ui,
-            &painter,
-            response.rect,
-            object,
-            &keyframes,
-            total_frames,
-        );
+        self.render_easing_labels(ui, &painter, response.rect, object, keyframes, total_frames);
         self.render_midpoint_lines(
             ui,
             &painter,
@@ -161,7 +153,7 @@ impl KeyframesGui {
             object,
             effect,
             track,
-            &keyframes,
+            keyframes,
             total_frames,
         );
         self.render_frame_cursor(&painter, info, object, response.rect, total_frames);
@@ -490,6 +482,9 @@ impl KeyframesGui {
                     };
                 Self::update_track_keyframes(object, effect, track, i, new_keyframes);
             }
+            click.on_hover_text(aviutl2::config::translate(
+                "クリックで中間点と継続を切り替え",
+            ));
 
             let color = if matches!(keyframes.keyframes[i], crate::keyframe::Keyframe::Ignored) {
                 GUI_COLORS.object_section_ignored
@@ -631,14 +626,19 @@ impl KeyframesGui {
                         .hint_text(aviutl2::config::translate("検索")),
                 );
                 if ui
-                    .add_enabled(
-                        !self.easing_search_text.is_empty(),
-                        egui::Button::new("×").min_size(egui::Vec2::splat(height)),
-                    )
-                    .on_hover_text(aviutl2::config::translate("検索をクリア"))
+                    .add(egui::Button::new("×").min_size(egui::Vec2::splat(height)))
+                    .on_hover_text(if self.easing_search_text.is_empty() {
+                        aviutl2::config::translate("閉じる")
+                    } else {
+                        aviutl2::config::translate("検索をクリア")
+                    })
                     .clicked()
                 {
-                    self.easing_search_text.clear();
+                    if self.easing_search_text.is_empty() {
+                        ui.close();
+                    } else {
+                        self.easing_search_text.clear();
+                    }
                 }
             });
             ui.separator();

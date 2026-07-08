@@ -2,6 +2,7 @@ use anyhow::Context;
 use aviutl2::module::ScriptModuleFunctions;
 
 pub static DEBUG_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub static CACHE_CLEARED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn vec_to_quat(values: Vec<f64>) -> [f64; 4] {
     assert!(values.len() == 4, "quat must have 4 components");
@@ -248,5 +249,12 @@ impl KeyframesMod2 {
 
     fn debug_mode(&self) -> bool {
         DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn is_cache_cleared(&self) -> bool {
+        CACHE_CLEARED.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    fn reset_cache_cleared(&self) {
+        CACHE_CLEARED.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 }

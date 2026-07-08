@@ -5,43 +5,58 @@
 
 local mod = obj.module("enhanced_tracks.aux2")
 local ffi = require("ffi")
-local bank_id, keyframe_id, scene_id, project_session_nonce = obj.getpoint("param")
-local index, ratio = math.modf(obj.getpoint("index"))
-local inspect = mod.debug_mode()
+local o_bank_id, o_keyframe_id, o_scene_id, o_project_session_nonce = obj.getpoint("param")
+local o_index, o_ratio = math.modf(obj.getpoint("index"))
+local o_inspect = mod.debug_mode()
 
-if bank_id == 0 then
-  if inspect then
+if o_bank_id == 0 then
+  if o_inspect then
     print("== Keyframe Track Debug Info ==")
     print("Bank ID is 0, falling back to linear track")
   end
-  local left = obj.getpoint(index)
-  local right = obj.getpoint(index + 1)
-  return left + (right - left) * ratio
+  local left = obj.getpoint(o_index)
+  local right = obj.getpoint(o_index + 1)
+  return left + (right - left) * o_ratio
 end
 
-local indices, script_name, script_ptr, script_len, script_dir, accelerate, decelerate, params = mod.get_keyframe(
-  bank_id, keyframe_id, scene_id, project_session_nonce, index)
+local o_indices, o_script_name, o_script_ptr, o_script_len, o_script_dir, o_accelerate, o_decelerate, o_params = mod
+    .get_keyframe(
+      o_bank_id, o_keyframe_id, o_scene_id, o_project_session_nonce, o_index)
 
 SCRIPT_CACHE = SCRIPT_CACHE or {}
+if mod.is_cache_cleared() then
+  print("@info", "clearing script cache")
+  SCRIPT_CACHE = {}
+  mod.reset_cache_cleared()
+end
+
 local f
-if SCRIPT_CACHE[script_name] then
-  f = SCRIPT_CACHE[script_name]
+if SCRIPT_CACHE[o_script_name] then
+  f = SCRIPT_CACHE[o_script_name]
 else
   local err
-  local script = ffi.string(script_ptr, script_len)
-  f, err = loadstring(script, script_name)
+  local script = ffi.string(o_script_ptr, o_script_len)
+  f, err = loadstring(script, o_script_name)
   if not f then
     error("Failed to load keyframe script: " .. err)
   end
   local inner_G = {}
   local inner_obj = {}
 
-  ENHANCED_TRACKS_STATE = {
-    indices, accelerate, decelerate, params
-  }
-
   inner_obj.getpoint = function(...)
-    local indices, accelerate, decelerate, params = unpack(ENHANCED_TRACKS_STATE)
+    if ENHANCED_TRACKS_STATE == nil then
+      return obj.getpoint(...)
+    end
+    local bank_id, keyframe_id, scene_id, project_session_nonce, index, indices, accelerate, decelerate, params = unpack(
+      ENHANCED_TRACKS_STATE)
+    if mod.debug_mode() then
+      print("== Keyframe Track Debug Info @ getpoint ==")
+      print("Indices:", indices)
+      print("Accelerate:", accelerate)
+      print("Decelerate:", decelerate)
+      print("Params:", params)
+      print("Arguments:", { ... })
+    end
     local args = { ... }
     local target = args[1]
     local option = args[2]
@@ -70,6 +85,14 @@ else
       else
         return obj.getpoint("time") - obj.getpoint("time", indices[1])
       end
+    elseif target == "frame_s" then
+      local starting_index = indices[1]
+      local starting_time = obj.getpoint("time", starting_index)
+      return obj.getpoint("frame_s") + starting_time
+    elseif target == "frame_e" then
+      local ending_index = indices[#indices]
+      local ending_time = obj.getpoint("time", ending_index)
+      return obj.getpoint("frame_s") + ending_time
     elseif target == "accelerate" then
       return accelerate
     elseif target == "decelerate" then
@@ -124,38 +147,65 @@ else
     end
   end
 
+  local function module_env_with_inner_obj(env, env_cache)
+    if env == inner_G then
+      return inner_G
+    end
+    if env_cache[env] then
+      return env_cache[env]
+    end
+
+    local replaced_env = {}
+    setmetatable(replaced_env, {
+      __index = function(_, key)
+        if key == "obj" then
+          return inner_obj
+        end
+        return env[key]
+      end,
+      __newindex = env,
+    })
+    env_cache[env] = replaced_env
+    return replaced_env
+  end
+
+  local function replace_obj_in_loaded_module(module, seen, env_cache)
+    if type(module) == "function" then
+      local ok, env = pcall(getfenv, module)
+      if ok and type(env) == "table" then
+        pcall(setfenv, module, module_env_with_inner_obj(env, env_cache))
+      end
+      return
+    end
+    if type(module) ~= "table" then
+      return
+    end
+
+    if seen[module] then
+      return
+    end
+    seen[module] = true
+
+    for _, value in pairs(module) do
+      replace_obj_in_loaded_module(value, seen, env_cache)
+    end
+  end
+
   inner_G.require = function(name)
     local loader_prefix
-    if #script_dir > 0 then
-      loader_prefix = script_dir .. "/?.lua;" .. script_dir .. "/?.dll;"
+    if #o_script_dir > 0 then
+      loader_prefix = o_script_dir .. "/?.lua;" .. o_script_dir .. "/?.dll;"
       package.path = loader_prefix .. package.path
     end
     local ok, result = pcall(require, name)
-    if #script_dir > 0 then
+    if #o_script_dir > 0 then
       package.path = package.path:sub(#loader_prefix + 1)
     end
     if not ok then
       error("Failed to require module '" .. name .. "': " .. tostring(result))
     end
+    replace_obj_in_loaded_module(result, {}, {})
     return result
-  end
-
-  if inspect then
-    print("== Keyframe Track Debug Info ==")
-    print("Bank ID:", bank_id)
-    print("Keyframe ID:", keyframe_id)
-    print("Indices:", indices)
-    print("Script Name:", script_name)
-    print("Accelerate:", accelerate)
-    print("Decelerate:", decelerate)
-    print("Params:", params)
-    local original_getpoint = inner_obj.getpoint
-    inner_obj.getpoint = function(...)
-      local args = { ... }
-      local ret = { original_getpoint(unpack(args)) }
-      print("getpoint", args, "->", ret)
-      return unpack(ret)
-    end
   end
 
   inner_G.obj = inner_obj
@@ -163,9 +213,25 @@ else
   setmetatable(inner_obj, { __index = obj, __newindex = obj })
   setmetatable(inner_G, { __index = _G, __newindex = _G })
   setfenv(f, inner_G)
-  SCRIPT_CACHE[script_name] = f
+  SCRIPT_CACHE[o_script_name] = f
+end
+
+ENHANCED_TRACKS_STATE = {
+  o_bank_id, o_keyframe_id, o_scene_id, o_project_session_nonce, o_index, o_indices, o_accelerate, o_decelerate, o_params
+}
+
+if o_inspect then
+  print("== Keyframe Track Debug Info @ script execution ==")
+  print("Bank ID:", o_bank_id)
+  print("Keyframe ID:", o_keyframe_id)
+  print("Indices:", o_indices)
+  print("Script Name:", o_script_name)
+  print("Accelerate:", o_accelerate)
+  print("Decelerate:", o_decelerate)
+  print("Params:", o_params)
 end
 
 local res = f()
+ENHANCED_TRACKS_STATE = nil
 
 return res
