@@ -12,13 +12,8 @@ impl KeyframesGui {
             target.effect_name,
         );
         tracing::debug!("New keyframes: {new_keyframes:?}");
-        let new_params = Self::update_keyframes_for_tracks(
-            target.object,
-            &target.effect_name,
-            target.effect_index,
-            &target.track_names,
-            new_keyframes,
-        );
+        let new_params =
+            Self::update_keyframes_for_tracks(target.effect, &target.track_names, new_keyframes);
         match new_params {
             Ok(new_params) => Some(new_params),
             Err(e) => {

@@ -3,7 +3,7 @@ use anyhow::Context;
 pub static RESOLVED_MIGRATIONS: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashSet<crate::KeyframeTrackParams>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
-type ResolvedSeedingKey = (aviutl2::generic::ObjectHandle, String, usize, String);
+type ResolvedSeedingKey = (aviutl2::generic::EffectHandle, String);
 static RESOLVED_SEEDINGS: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashSet<ResolvedSeedingKey>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
@@ -120,11 +120,7 @@ fn update_keyframe_bindings(
     let resolved_migrations = RESOLVED_MIGRATIONS.lock().unwrap();
     for (params, bindings) in &bindings {
         for binding in bindings {
-            let effect_key = (
-                binding.object,
-                binding.effect_name.clone(),
-                binding.effect_index,
-            );
+            let effect_key = binding.effect;
             if resolved_migrations.contains(params) {
                 continue;
             }
@@ -243,55 +239,41 @@ fn apply_bindings_change(
             let mut resolved_migrations = RESOLVED_MIGRATIONS.lock().unwrap();
             for (binding, new_params) in change_bindings {
                 tracing::info!(
-                    "Updating keyframe track params for object {:?}, effect {:?} (index {}), track {:?} to {:?}",
+                    "Updating keyframe track params for object {:?}, effect {:?} ({:?}), track {:?} to {:?}",
                     binding.object,
                     binding.effect_name,
-                    binding.effect_index,
+                    binding.effect,
                     binding.track_name,
                     new_params
                 );
-                let track = edit.get_object_effect_item(
-                    binding.object,
-                    &binding.effect_name,
-                    binding.effect_index,
-                    &binding.track_name,
-                )?;
+                let track = edit
+                    .effect(binding.effect)
+                    .get_item_value(&binding.track_name)?;
                 tracing::debug!(
-                    "Current keyframe track params for object {:?}, effect {:?} (index {}), track {:?}: {:?}",
+                    "Current keyframe track params for object {:?}, effect {:?} ({:?}), track {:?}: {:?}",
                     binding.object,
                     binding.effect_name,
-                    binding.effect_index,
+                    binding.effect,
                     binding.track_name,
                     &track
                 );
                 let previous_params = crate::KeyframeTrackParams::parse(
                     edit,
-                    binding.object,
-                    &binding.effect_name,
-                    binding.effect_index,
+                    binding.effect,
                     &binding.track_name,
                 );
                 if let Some(previous_params) = previous_params && previous_params.bank_id != 0 {
                     resolved_migrations.insert(previous_params);
                 }
-                new_params.set_params(
-                    edit,
-                    binding.object,
-                    &binding.effect_name,
-                    binding.effect_index,
-                    &binding.track_name,
-                )?;
-                let track = edit.get_object_effect_item(
-                    binding.object,
-                    &binding.effect_name,
-                    binding.effect_index,
-                    &binding.track_name,
-                )?;
+                new_params.set_params(edit, binding.effect, &binding.track_name)?;
+                let track = edit
+                    .effect(binding.effect)
+                    .get_item_value(&binding.track_name)?;
                 tracing::debug!(
-                    "Updated keyframe track params for object {:?}, effect {:?} (index {}), track {:?} to {:?}",
+                    "Updated keyframe track params for object {:?}, effect {:?} ({:?}), track {:?} to {:?}",
                     binding.object,
                     binding.effect_name,
-                    binding.effect_index,
+                    binding.effect,
                     binding.track_name,
                     &track
                 );
@@ -307,25 +289,15 @@ fn collect_object_keyframe_bindings(
     object_handle: aviutl2::generic::ObjectHandle,
     bindings: &mut indexmap::IndexMap<crate::KeyframeTrackParams, Vec<crate::KeyframeBinding>>,
 ) -> aviutl2::common::AnyResult<()> {
-    let mut effect_count = std::collections::HashMap::<String, usize>::new();
     for effect in read.get_effects(object_handle)? {
         let effect = read.effect(effect);
         let effect_name = effect.get_name().context("Failed to get effect name")?;
-        let effect_index = *effect_count
-            .entry(effect_name.to_string())
-            .and_modify(|count| *count += 1)
-            .or_insert(0);
         crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }
-            let Some(params) = crate::KeyframeTrackParams::parse(
-                read,
-                object_handle,
-                &effect_name,
-                effect_index,
-                &item.name,
-            ) else {
+            let Some(params) = crate::KeyframeTrackParams::parse(read, effect.handle, &item.name)
+            else {
                 return;
             };
             bindings
@@ -333,8 +305,8 @@ fn collect_object_keyframe_bindings(
                 .or_default()
                 .push(crate::KeyframeBinding {
                     object: object_handle,
+                    effect: effect.handle,
                     effect_name: effect_name.to_string(),
-                    effect_index,
                     track_name: item.name,
                 });
         })?;

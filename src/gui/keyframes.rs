@@ -68,7 +68,7 @@ impl KeyframesGui {
         egui::containers::CollapsingHeader::new(crate::utils::get_translated_effect_name(
             &effect.name,
         ))
-        .id_salt((effect.index, &effect.name))
+        .id_salt(effect.handle)
         .enabled(!effect.keyframe_tracks.is_empty())
         .open(effect.keyframe_tracks.is_empty().then_some(false))
         .show(ui, |ui| {
@@ -137,7 +137,6 @@ impl KeyframesGui {
             ui,
             &painter,
             response.rect,
-            object,
             effect,
             params,
             track,
@@ -201,7 +200,6 @@ impl KeyframesGui {
         ui: &mut egui::Ui,
         painter: &egui::Painter,
         track_rect: egui::Rect,
-        object: &SelectedObjectInfo,
         effect: &EffectInfo,
         params: &crate::KeyframeTrackParams,
         track: &KeyframeTrackInfo,
@@ -252,7 +250,7 @@ impl KeyframesGui {
                     .get(&current_kf_info.easing)
                     .is_some_and(|easing| easing.has_timecontrol)
             {
-                self.open_timecontrol_editor(params, object, effect, track, i, kf_info);
+                self.open_timecontrol_editor(params, effect, track, i, kf_info);
                 tracing::info!(
                     "Opening time control dialog by double click for section {} of track {:?} in effect {:?}",
                     section.0,
@@ -268,19 +266,12 @@ impl KeyframesGui {
                         ui,
                         keyframes,
                         params,
-                        object,
                         effect,
                         track,
                         section.0,
                         "",
                         |new_keyframes| {
-                            Self::update_track_keyframes(
-                                object,
-                                effect,
-                                track,
-                                section.0,
-                                new_keyframes,
-                            );
+                            Self::update_track_keyframes(effect, track, section.0, new_keyframes);
                         },
                     );
                 });
@@ -290,7 +281,6 @@ impl KeyframesGui {
     fn open_timecontrol_editor(
         &mut self,
         params: &crate::KeyframeTrackParams,
-        object: &SelectedObjectInfo,
         effect: &EffectInfo,
         track: &KeyframeTrackInfo,
         keyframe_index: usize,
@@ -299,9 +289,8 @@ impl KeyframesGui {
         self.timecontrol_editor = Some(TimeControlEditorTarget {
             params: *params,
             keyframe_index,
-            object: object.handle,
+            effect: effect.handle,
             effect_name: effect.name.clone(),
-            effect_index: effect.index,
             track_names: track.names.clone(),
             timecontrol: keyframe.timecontrol.clone(),
             selected_point: 0,
@@ -338,7 +327,6 @@ impl KeyframesGui {
     }
 
     fn update_track_keyframes(
-        object: &SelectedObjectInfo,
         effect: &EffectInfo,
         track: &KeyframeTrackInfo,
         section_index: usize,
@@ -351,13 +339,8 @@ impl KeyframesGui {
             effect.name,
             &new_keyframes
         );
-        let new_params = Self::update_keyframes_for_tracks(
-            object.handle,
-            &effect.name,
-            effect.index,
-            &track.names,
-            new_keyframes,
-        );
+        let new_params =
+            Self::update_keyframes_for_tracks(effect.handle, &track.names, new_keyframes);
         match new_params {
             Ok(new_params) => {
                 tracing::info!(
@@ -480,7 +463,7 @@ impl KeyframesGui {
                     } else {
                         crate::keyframe::Keyframe::Ignored
                     };
-                Self::update_track_keyframes(object, effect, track, i, new_keyframes);
+                Self::update_track_keyframes(effect, track, i, new_keyframes);
             }
             click.on_hover_text(aviutl2::config::translate(
                 "クリックで中間点と継続を切り替え",
@@ -532,7 +515,7 @@ impl KeyframesGui {
                 {
                     crate::KEYFRAMES.insert(new_params, keyframes);
                 }
-                new_params.set_params(edit, object.handle, &effect.name, effect.index, name)?;
+                new_params.set_params(edit, effect.handle, name)?;
                 anyhow::Ok(())
             })
             .map_err(anyhow::Error::from)
@@ -563,7 +546,6 @@ impl KeyframesGui {
         ui: &mut egui::Ui,
         keyframes: &crate::keyframe::Keyframes,
         params: &crate::KeyframeTrackParams,
-        object: &SelectedObjectInfo,
         effect: &EffectInfo,
         track: &KeyframeTrackInfo,
         index: usize,
@@ -602,7 +584,6 @@ impl KeyframesGui {
                     ui,
                     keyframes,
                     params,
-                    object,
                     effect,
                     track,
                     keyframe_index,
@@ -701,7 +682,6 @@ impl KeyframesGui {
         ui: &mut egui::Ui,
         keyframes: &crate::keyframe::Keyframes,
         params: &crate::KeyframeTrackParams,
-        object: &SelectedObjectInfo,
         effect: &EffectInfo,
         track: &KeyframeTrackInfo,
         keyframe_index: usize,
@@ -735,7 +715,6 @@ impl KeyframesGui {
             if ui.button(aviutl2::config::translate("時間制御")).clicked() {
                 self.open_timecontrol_editor(
                     params,
-                    object,
                     effect,
                     track,
                     keyframe_index,

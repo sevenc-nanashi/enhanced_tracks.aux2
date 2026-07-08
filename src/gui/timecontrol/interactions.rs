@@ -1097,9 +1097,7 @@ impl KeyframesGui {
         }
         let params = match crate::KeyframeTrackParams::parse(
             read,
-            target.object,
-            &target.effect_name,
-            target.effect_index,
+            target.effect,
             &target.track_names[0],
         ) {
             Some(params) => params,

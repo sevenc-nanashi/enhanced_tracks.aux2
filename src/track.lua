@@ -155,12 +155,12 @@ else
     local errors = {}
 
     for _, loader in ipairs(package.loaders) do
-      local f, extra = loader(name)
+      local l, extra = loader(name)
 
-      if type(f) == "function" then
-        setfenv(f, env)
+      if type(l) == "function" then
+        setfenv(l, env)
 
-        local result = f(name, extra)
+        local result = l(name, extra)
 
         if result ~= nil then
           package.loaded[name] = result
@@ -169,8 +169,8 @@ else
         end
 
         return package.loaded[name]
-      elseif type(f) == "string" then
-        errors[#errors + 1] = f
+      elseif type(l) == "string" then
+        errors[#errors + 1] = l
       end
     end
 

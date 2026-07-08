@@ -142,7 +142,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 [[package]]
 name = "aviutl2"
 version = "0.38.2"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#27021c9757eca3fe7144c53b1311028d07a73fd6"
+source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#b5f5371e0033959a88342af81374220fa8b95d32"
 dependencies = [
  "anyhow",
  "aviutl2-alias",
@@ -174,7 +174,7 @@ dependencies = [
 [[package]]
 name = "aviutl2-alias"
 version = "0.38.2"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#27021c9757eca3fe7144c53b1311028d07a73fd6"
+source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#b5f5371e0033959a88342af81374220fa8b95d32"
 dependencies = [
  "duplicate",
  "indexmap",
@@ -184,7 +184,7 @@ dependencies = [
 [[package]]
 name = "aviutl2-eframe"
 version = "0.38.2"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#27021c9757eca3fe7144c53b1311028d07a73fd6"
+source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#b5f5371e0033959a88342af81374220fa8b95d32"
 dependencies = [
  "anyhow",
  "aviutl2",
@@ -197,7 +197,7 @@ dependencies = [
 [[package]]
 name = "aviutl2-macros"
 version = "0.38.2"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#27021c9757eca3fe7144c53b1311028d07a73fd6"
+source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#b5f5371e0033959a88342af81374220fa8b95d32"
 dependencies = [
  "decimal-rs",
  "either",
@@ -211,7 +211,7 @@ dependencies = [
 [[package]]
 name = "aviutl2-sys"
 version = "0.38.2"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#27021c9757eca3fe7144c53b1311028d07a73fd6"
+source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#b5f5371e0033959a88342af81374220fa8b95d32"
 dependencies = [
  "windows-sys 0.61.2",
 ]

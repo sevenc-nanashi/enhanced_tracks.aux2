@@ -95,22 +95,18 @@ impl KeyframeTrackParams {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct KeyframeBinding {
     pub object: aviutl2::generic::ObjectHandle,
+    pub effect: aviutl2::generic::EffectHandle,
     pub effect_name: String,
-    pub effect_index: usize,
     pub track_name: String,
 }
 
 impl KeyframeTrackParams {
     pub fn parse(
         read: &aviutl2::generic::ReadSection,
-        object: aviutl2::generic::ObjectHandle,
-        effect_name: &str,
-        effect_index: usize,
+        effect: aviutl2::generic::EffectHandle,
         track_name: &str,
     ) -> Option<Self> {
-        let info = read
-            .get_object_track_info(object, effect_name, effect_index, track_name)
-            .ok()??;
+        let info = read.effect(effect).get_track_info(track_name).ok()??;
         if info.mode != "enhanced_tracks.aux2" {
             return None;
         }
@@ -132,16 +128,14 @@ impl KeyframeTrackParams {
     pub fn set_params(
         &self,
         edit: &aviutl2::generic::EditSection,
-        object: aviutl2::generic::ObjectHandle,
-        effect_name: &str,
-        effect_index: usize,
+        effect: aviutl2::generic::EffectHandle,
         track_name: &str,
     ) -> anyhow::Result<()> {
-        let current_params = edit
-            .get_object_track_info(object, effect_name, effect_index, track_name)
+        let effect = edit.effect(effect);
+        let current_params = effect
+            .get_track_info(track_name)
             .context("Failed to get current track info")?;
-        let current_track =
-            edit.get_object_effect_item(object, effect_name, effect_index, track_name)?;
+        let current_track = effect.get_item_value(track_name)?;
         let track_alias_param = format!(
             "{},{},{},{}",
             self.bank_id, self.keyframes_id, self.scene_id, self.project_session_nonce
@@ -221,7 +215,8 @@ impl KeyframeTrackParams {
                 }
             }
         };
-        edit.set_object_effect_item(object, effect_name, effect_index, track_name, &new_track)
+        effect
+            .set_item_value(track_name, &new_track)
             .context("Failed to set new track")?;
         Ok(())
     }
@@ -552,24 +547,13 @@ fn collect_used_keyframes(
     object: aviutl2::generic::ObjectHandle,
     used_keyframes: &mut std::collections::HashSet<KeyframeTrackParams>,
 ) -> anyhow::Result<()> {
-    let mut effect_indices = std::collections::HashMap::new();
     for effect in edit.get_effects(object)? {
         let effect_name = edit.get_effect_name(effect)?;
-        let effect_index = *effect_indices
-            .entry(effect_name.clone())
-            .and_modify(|index| *index += 1)
-            .or_insert(0);
         crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }
-            let Some(params) = crate::KeyframeTrackParams::parse(
-                edit,
-                object,
-                &effect_name,
-                effect_index,
-                &item.name,
-            ) else {
+            let Some(params) = crate::KeyframeTrackParams::parse(edit, effect, &item.name) else {
                 return;
             };
             used_keyframes.insert(params);

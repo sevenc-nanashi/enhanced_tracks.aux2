@@ -18,9 +18,8 @@ pub struct KeyframesGui {
 pub struct TimeControlEditorTarget {
     pub params: crate::KeyframeTrackParams,
     pub keyframe_index: usize,
-    pub object: aviutl2::generic::ObjectHandle,
+    pub effect: aviutl2::generic::EffectHandle,
     pub effect_name: String,
-    pub effect_index: usize,
     pub track_names: Vec<String>,
     pub timecontrol: crate::keyframe::TimeControl,
     pub selected_point: usize,
@@ -129,8 +128,8 @@ pub struct SelectedObjectInfo {
 
 #[derive(Debug, Clone)]
 pub struct EffectInfo {
+    pub handle: aviutl2::generic::EffectHandle,
     pub name: String,
-    pub index: usize,
     pub effect_type: EffectType,
     pub keyframe_tracks: indexmap::IndexMap<crate::KeyframeTrackParams, KeyframeTrackInfo>,
 }
@@ -306,9 +305,7 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
 
 impl KeyframesGui {
     pub fn update_keyframes_for_tracks(
-        object: aviutl2::generic::ObjectHandle,
-        effect_name: &str,
-        effect_index: usize,
+        effect: aviutl2::generic::EffectHandle,
         track_names: &[String],
         new_keyframes: crate::keyframe::Keyframes,
     ) -> anyhow::Result<crate::KeyframeTrackParams> {
@@ -317,7 +314,7 @@ impl KeyframesGui {
                 let new_params = crate::KeyframeTrackParams::new(edit.info.scene_id);
                 crate::KEYFRAMES.insert(new_params, new_keyframes);
                 for name in track_names {
-                    new_params.set_params(edit, object, effect_name, effect_index, name)?;
+                    new_params.set_params(edit, effect, name)?;
                 }
                 anyhow::Ok(new_params)
             })
@@ -406,7 +403,6 @@ impl KeyframesGui {
             .context("Failed to get effect info")?;
         let first_effect_type = Self::determine_effect_type(&first_effect_info, None);
         let mut effects = Vec::new();
-        let mut effect_count = std::collections::HashMap::<String, usize>::new();
         for effect in read
             .object(selected_object)
             .get_effects()
@@ -419,28 +415,20 @@ impl KeyframesGui {
                 .get(&effect_name)
                 .context("Failed to get effect info")?;
             let effect_type = Self::determine_effect_type(&effect_info, Some(first_effect_type));
-            let effect_index = *effect_count
-                .entry(effect_name.to_string())
-                .and_modify(|c| *c += 1)
-                .or_insert(0);
 
             let mut effect_info = EffectInfo {
+                handle: effect.handle,
                 name: effect_name.to_string(),
                 effect_type,
-                index: effect_index,
                 keyframe_tracks: indexmap::IndexMap::new(),
             };
             crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
                 if item.item_type != aviutl2::generic::EffectItemType::Number {
                     return;
                 }
-                if let Some(params) = crate::KeyframeTrackParams::parse(
-                    read,
-                    selected_object,
-                    &effect_name,
-                    effect_index,
-                    &item.name,
-                ) {
+                if let Some(params) =
+                    crate::KeyframeTrackParams::parse(read, effect.handle, &item.name)
+                {
                     // let keyframe_info = KeyframeTrackInfo {
                     //     name: key.to_string(),
                     //     params,
