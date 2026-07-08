@@ -117,7 +117,7 @@ else
       local target_time = option2 or obj.getpoint("time")
       local left_time = obj.getpoint("time", indices[1])
       local right_time = obj.getpoint("time", indices[#indices])
-      ratio = target_time / (right_time - left_time)
+      local ratio = target_time / (right_time - left_time)
       local value = mod.get_timecontrol_value(bank_id, keyframe_id, scene_id, project_session_nonce, index, ratio)
       if option == "value" then
         return value
