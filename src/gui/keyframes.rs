@@ -18,7 +18,7 @@ impl AsRef<str> for EasingSearchItem<'_> {
 impl KeyframesGui {
     pub fn render_selected_object_info(&mut self, ui: &mut egui::Ui) {
         let Some(selected_object_info) = self.selected_object_info.clone() else {
-            ui.label(aviutl2::config::translate("No object selected"));
+            ui.label(aviutl2::config::translate("オブジェクトが選択されていません"));
             return;
         };
         // ui.label(format!("Selected Object: {}", selected_object_info.name));

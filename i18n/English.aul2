@@ -1,6 +1,6 @@
 [enhanced_tracks.aux2]
-No object selected=No object selected
-Initializing...=Initializing...
+オブジェクトが選択されていません=No object selected
+初期化中...=Initializing...
 一時停止中=Paused
 Undoを妨げないために同期を中断しています。クリックで再同期します。=Synchronization is paused to avoid blocking Undo. Click to resync.
 分離=Detach

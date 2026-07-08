@@ -297,7 +297,7 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
                     });
                 }
             } else {
-                ui.label(aviutl2::config::translate("Initializing..."));
+                ui.label(aviutl2::config::translate("初期化中..."));
             }
         });
     }
