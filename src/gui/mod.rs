@@ -264,8 +264,10 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
 
             let update_selected_object_info = crate::EDIT_HANDLE
                 .call_read_section(|read| {
-                    self.update_selected_object_info(read)?;
-                    self.update_timecontrol_editor_target(read)?;
+                    self.update_selected_object_info(read)
+                        .context("Failed to update selected object info")?;
+                    self.update_timecontrol_editor_target(read)
+                        .context("Failed to update timecontrol editor target")?;
                     anyhow::Ok(())
                 })
                 .map_err(anyhow::Error::from)
@@ -280,8 +282,11 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
         ui: &mut aviutl2_eframe::egui::Ui,
         _frame: &mut aviutl2_eframe::eframe::Frame,
     ) {
+        // NOTE: オブジェクトの選択状態が変わったときのコールバックがあれば
+        // そっちを使ったほうが良いはず
         ui.request_repaint_after(std::time::Duration::from_millis(100));
-        egui::CentralPanel::default().show_inside(ui, |ui| {
+
+        egui::CentralPanel::default().show(ui, |ui| {
             if crate::EDIT_HANDLE.is_ready() {
                 if self.is_undo_mode() {
                     self.render_undo_mode_warning(ui);
@@ -340,10 +345,8 @@ impl KeyframesGui {
         let rect = response.rect;
 
         if response.clicked() {
-            let mut resolved_migrations = crate::watcher::RESOLVED_MIGRATIONS.lock().unwrap();
-            resolved_migrations.clear();
             crate::KeyframesAux2::with_instance(|aux| {
-                aux.watcher.notify_continue_sync();
+                aux.watcher.flush_resolved_migrations();
             });
         }
 
@@ -391,31 +394,29 @@ impl KeyframesGui {
             self.selected_object_info = None;
             return Ok(());
         };
-        let alias = read
-            .get_object_alias_parsed(selected_object)
-            .context("Failed to get object alias")?;
-        let objects = alias
-            .get_table("Object")
-            .context("Failed to get Object table")?;
-        let first_effect = objects
-            .get_table("0")
-            .context("Failed to get first object in Object table")?;
-        let first_effect_name = first_effect
-            .get_value("effect.name")
-            .context("Failed to get effect name")?;
+        let first_effect_name = read
+            .get_effect_name(
+                read.object(selected_object)
+                    .get_first_effect()
+                    .context("Failed to get first effect")?,
+            )
+            .context("Failed to get first effect name")?;
         let first_effect_info = crate::EFFECTS
-            .get(first_effect_name)
+            .get(&first_effect_name)
             .context("Failed to get effect info")?;
         let first_effect_type = Self::determine_effect_type(&first_effect_info, None);
         let mut effects = Vec::new();
         let mut effect_count = std::collections::HashMap::<String, usize>::new();
-        for object in objects.iter_subtables_as_array() {
-            let effect_name = object
-                .get_value("effect.name")
-                .context("Failed to get effect name")?;
+        for effect in read
+            .object(selected_object)
+            .get_effects()
+            .context("Failed to get effects")?
+        {
+            let effect = read.effect(effect);
+            let effect_name = effect.get_name().context("Failed to get effect name")?;
 
             let effect_info = crate::EFFECTS
-                .get(effect_name)
+                .get(&effect_name)
                 .context("Failed to get effect info")?;
             let effect_type = Self::determine_effect_type(&effect_info, Some(first_effect_type));
             let effect_index = *effect_count
@@ -429,14 +430,14 @@ impl KeyframesGui {
                 index: effect_index,
                 keyframe_tracks: indexmap::IndexMap::new(),
             };
-            crate::EDIT_HANDLE.enumerate_effect_items(effect_name, |item| {
+            crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
                 if item.item_type != aviutl2::generic::EffectItemType::Number {
                     return;
                 }
                 if let Some(params) = crate::KeyframeTrackParams::parse(
                     read,
                     selected_object,
-                    effect_name,
+                    &effect_name,
                     effect_index,
                     &item.name,
                 ) {
@@ -491,12 +492,24 @@ impl KeyframesGui {
             }
         });
 
-        let frames = objects
-            .get_value("frame")
-            .context("Failed to get frame value")?
-            .split(',')
-            .filter_map(|s| s.parse::<usize>().ok())
-            .collect::<Vec<_>>();
+        // let frames = read
+        //     .get_object_section_frames(selected_object)
+        //     .context("Failed to get object section frames")?;
+        let frames = {
+            let section_num = read.get_object_section_num(selected_object)?;
+            let mut frames = Vec::new();
+            for section in 0..section_num {
+                frames.push(
+                    read.get_object_section_frame(selected_object, section)?
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("Failed to get frame for section {section}")
+                        })?,
+                );
+            }
+            let last_frame = read.get_object_layer_frame(selected_object)?;
+            frames.push(last_frame.end + 1);
+            frames
+        };
         let selected_object_info = SelectedObjectInfo {
             handle: selected_object,
             name: object_name,

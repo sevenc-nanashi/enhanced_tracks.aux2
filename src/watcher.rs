@@ -3,11 +3,15 @@ use anyhow::Context;
 pub static RESOLVED_MIGRATIONS: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashSet<crate::KeyframeTrackParams>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+type ResolvedSeedingKey = (aviutl2::generic::ObjectHandle, String, usize, String);
+static RESOLVED_SEEDINGS: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashSet<ResolvedSeedingKey>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
 
 #[derive(Debug)]
 pub enum WatcherMessage {
     ObjectChanged,
-    ContinueSync,
+    FlushResolved,
     Shutdown,
 }
 
@@ -24,8 +28,12 @@ impl WatcherThread {
             while let Ok(message) = receiver.recv() {
                 tracing::trace!("Watcher thread received message: {:?}", message);
                 match message {
-                    WatcherMessage::ObjectChanged | WatcherMessage::ContinueSync => {
-                        refresh_bindings()
+                    WatcherMessage::ObjectChanged | WatcherMessage::FlushResolved => {
+                        refresh_bindings();
+
+                        if let Some(ctx) = crate::EGUI_CONTEXT.lock().unwrap().as_ref() {
+                            ctx.request_repaint();
+                        }
                     }
                     WatcherMessage::Shutdown => break,
                 }
@@ -45,8 +53,12 @@ impl WatcherThread {
             );
         }
     }
-    pub fn notify_continue_sync(&self) {
-        if let Err(e) = self.sender.send(WatcherMessage::ContinueSync) {
+    pub fn flush_resolved_migrations(&self) {
+        let mut resolved_migrations = RESOLVED_MIGRATIONS.lock().unwrap();
+        let mut resolved_seedings = RESOLVED_SEEDINGS.lock().unwrap();
+        resolved_migrations.clear();
+        resolved_seedings.clear();
+        if let Err(e) = self.sender.send(WatcherMessage::FlushResolved) {
             tracing::error!(
                 "Failed to send continue sync message to watcher thread: {:?}",
                 e
@@ -105,10 +117,6 @@ fn update_keyframe_bindings(
         indexmap::IndexMap::<crate::KeyframeBinding, crate::KeyframeTrackParams>::new();
     let mut migrations =
         std::collections::HashMap::<crate::KeyframeTrackParams, crate::KeyframeTrackParams>::new();
-    let mut param_to_effect = indexmap::IndexMap::<
-        crate::KeyframeTrackParams,
-        (aviutl2::generic::ObjectHandle, String, usize),
-    >::new();
     let resolved_migrations = RESOLVED_MIGRATIONS.lock().unwrap();
     for (params, bindings) in &bindings {
         for binding in bindings {
@@ -120,38 +128,13 @@ fn update_keyframe_bindings(
             if resolved_migrations.contains(params) {
                 continue;
             }
-            if let Some(existing_params) = param_to_effect.get(params)
-                && existing_params != &effect_key
-            {
-                tracing::info!(
-                    "Duplicated keyframe track params {:?} for effect {:?} and effect {:?}",
-                    params,
-                    existing_params,
-                    effect_key
-                );
-                let new_params = *migrations
-                    .entry(*params)
-                    .or_insert_with(|| crate::KeyframeTrackParams::new(info.scene_id));
-                change_bindings.insert(binding.clone(), new_params);
-                if let Some(keyframes) = crate::KEYFRAMES
-                    .get(params)
-                    .map(|keyframes| keyframes.clone())
-                {
-                    crate::KEYFRAMES.insert(new_params, keyframes);
-                }
-                migrations.insert(*params, new_params);
-            } else if params.bank_id == 0 {
-                tracing::info!(
-                    "Uninitialized keyframe track params {:?} for effect {:?}",
+            if params.bank_id == 0 {
+                tracing::debug!(
+                    "Uninitialized keyframe track params {:?} for effect {:?}, skipping",
                     params,
                     effect_key
                 );
-                let num_sections = read.get_object_section_num(binding.object)?;
-                let num_keyframes = num_sections + 1;
-                let new_params = crate::KeyframeTrackParams::new(info.scene_id);
-                let keyframes = crate::keyframe::Keyframes::new(num_keyframes);
-                crate::KEYFRAMES.insert(new_params, keyframes);
-                change_bindings.insert(binding.clone(), new_params);
+                continue;
             } else if params.project_session_nonce != crate::current_project_session_nonce() {
                 tracing::info!(
                     "Keyframe track params {:?} for effect {:?} has different project session nonce ({} in object, {} in plugin)",
@@ -174,7 +157,6 @@ fn update_keyframe_bindings(
                     crate::KEYFRAMES.insert(new_params, keyframe);
                     change_bindings.insert(binding.clone(), new_params);
                     migrations.insert(*params, new_params);
-                    param_to_effect.insert(*params, effect_key);
                 } else {
                     tracing::warn!(
                         "Keyframe track params {:?} for effect {:?} has different project session nonce but no keyframes found in global map, possibly due to copying from another project session.",
@@ -191,7 +173,6 @@ fn update_keyframe_bindings(
                         .insert(new_params, crate::keyframe::Keyframes::new(num_keyframes));
                     change_bindings.insert(binding.clone(), new_params);
                     migrations.insert(*params, new_params);
-                    param_to_effect.insert(*params, effect_key);
                 }
             } else if params.scene_id != info.scene_id {
                 tracing::info!(
@@ -209,7 +190,6 @@ fn update_keyframe_bindings(
                 crate::KEYFRAMES.insert(new_params, crate::keyframe::Keyframes::new(num_keyframes));
                 change_bindings.insert(binding.clone(), new_params);
                 migrations.insert(*params, new_params);
-                param_to_effect.insert(*params, effect_key);
             } else {
                 let num_keyframes = read.get_object_section_num(binding.object)? + 1;
                 match crate::KEYFRAMES.get(params) {
@@ -221,7 +201,6 @@ fn update_keyframe_bindings(
                         );
                         crate::KEYFRAMES
                             .insert(*params, crate::keyframe::Keyframes::new(num_keyframes));
-                        param_to_effect.insert(*params, effect_key);
                     }
                     Some(existing_keyframes)
                         if existing_keyframes.keyframes.len() != num_keyframes =>
@@ -241,12 +220,9 @@ fn update_keyframe_bindings(
                         new_keyframes.resize(num_keyframes);
                         crate::KEYFRAMES.insert(new_params, new_keyframes);
                         change_bindings.insert(binding.clone(), new_params);
-                        param_to_effect.insert(*params, effect_key);
                         migrations.insert(*params, new_params);
                     }
-                    Some(_) => {
-                        param_to_effect.insert(*params, effect_key);
-                    }
+                    Some(_) => {}
                 };
             }
         }
@@ -331,30 +307,22 @@ fn collect_object_keyframe_bindings(
     object_handle: aviutl2::generic::ObjectHandle,
     bindings: &mut indexmap::IndexMap<crate::KeyframeTrackParams, Vec<crate::KeyframeBinding>>,
 ) -> aviutl2::common::AnyResult<()> {
-    let alias = read
-        .get_object_alias_parsed(object_handle)
-        .context("Failed to get object alias")?;
-    let objects = alias
-        .get_table("Object")
-        .context("Failed to get Object table")?;
-
     let mut effect_count = std::collections::HashMap::<String, usize>::new();
-    for object in objects.iter_subtables_as_array() {
-        let effect_name = object
-            .get_value("effect.name")
-            .context("Failed to get effect name")?;
+    for effect in read.get_effects(object_handle)? {
+        let effect = read.effect(effect);
+        let effect_name = effect.get_name().context("Failed to get effect name")?;
         let effect_index = *effect_count
             .entry(effect_name.to_string())
             .and_modify(|count| *count += 1)
             .or_insert(0);
-        crate::EDIT_HANDLE.enumerate_effect_items(effect_name, |item| {
+        crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }
             let Some(params) = crate::KeyframeTrackParams::parse(
                 read,
                 object_handle,
-                effect_name,
+                &effect_name,
                 effect_index,
                 &item.name,
             ) else {

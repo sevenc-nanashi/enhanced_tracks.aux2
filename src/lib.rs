@@ -49,6 +49,9 @@ pub static CURRENT_SCENE_USAGE: std::sync::LazyLock<std::sync::Mutex<CurrentScen
     });
 pub static PROJECT_SESSION_NONCE: std::sync::LazyLock<std::sync::Mutex<usize>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(new_project_session_nonce()));
+pub static EGUI_CONTEXT: std::sync::LazyLock<
+    std::sync::Mutex<Option<aviutl2_eframe::egui::Context>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
 
 fn new_project_session_nonce() -> usize {
     rand::random_range(1..32768)
@@ -82,6 +85,10 @@ impl KeyframeTrackParams {
         };
         *current_keyframes_id += 1;
         params
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        self.bank_id != 0
     }
 }
 
@@ -255,13 +262,15 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
         let window = handle.get_host_app_window_raw().unwrap();
         match self.gui.handle() {
             Ok(handle) => {
-                self.gui.egui_ctx().unwrap().set_pixels_per_point(unsafe {
+                let ctx = self.gui.egui_ctx().unwrap();
+                ctx.set_pixels_per_point(unsafe {
                     windows::Win32::UI::HiDpi::GetDpiForWindow(windows::Win32::Foundation::HWND(
                         window.hwnd.get() as *mut std::ffi::c_void,
                     )) as f32
                         / 96.0
                 });
                 let _ = registry.register_window_client("enhanced_tracks.aux2", &handle);
+                EGUI_CONTEXT.lock().unwrap().replace(ctx.clone());
             }
             Err(e) => {
                 tracing::error!("Failed to register GUI window: {:?}", e);
@@ -312,13 +321,19 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
         project.serialize("keyframes", &keyframes).unwrap();
     }
 
-    fn on_change_scene(&mut self, edit: &aviutl2::generic::EditSection) {
-        {
-            let mut current_bank_id = CURRENT_BANK.lock().unwrap();
-            *current_bank_id += 1;
+    fn event_change_scene_info(&mut self) {
+        let update = EDIT_HANDLE.call_read_section(|edit| {
+            {
+                let mut current_bank_id = CURRENT_BANK.lock().unwrap();
+                *current_bank_id += 1;
+            }
+            let info = EDIT_HANDLE.get_edit_info();
+            clear_unused_keyframes(&info, edit);
+            self.watcher.notify_object_change();
+        });
+        if let Err(e) = update {
+            tracing::error!("Failed to run callback on scene change: {:?}", e);
         }
-        clear_unused_keyframes(&edit.info, edit);
-        self.watcher.notify_object_change();
     }
 
     fn on_clear_cache(&mut self, _edit: &aviutl2::generic::EditSection) {
@@ -334,6 +349,12 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
 
     fn event_update_object_info(&mut self) {
         self.watcher.notify_object_change();
+    }
+
+    fn event_change_edit_frame(&mut self) {
+        if let Some(ctx) = EGUI_CONTEXT.lock().unwrap().as_ref() {
+            ctx.request_repaint();
+        }
     }
 }
 
@@ -530,29 +551,21 @@ fn collect_used_keyframes(
     object: aviutl2::generic::ObjectHandle,
     used_keyframes: &mut std::collections::HashSet<KeyframeTrackParams>,
 ) -> anyhow::Result<()> {
-    let alias = edit
-        .get_object_alias_parsed(object)
-        .context("Failed to get object alias")?;
-    let objects = alias
-        .get_table("Object")
-        .context("Failed to get Object table")?;
     let mut effect_indices = std::collections::HashMap::new();
-    for effect in objects.iter_subtables_as_array() {
-        let effect_name = effect
-            .get_value("effect.name")
-            .context("Failed to get effect name")?;
+    for effect in edit.get_effects(object)? {
+        let effect_name = edit.get_effect_name(effect)?;
         let effect_index = *effect_indices
             .entry(effect_name.clone())
             .and_modify(|index| *index += 1)
             .or_insert(0);
-        crate::EDIT_HANDLE.enumerate_effect_items(effect_name, |item| {
+        crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }
             let Some(params) = crate::KeyframeTrackParams::parse(
                 edit,
                 object,
-                effect_name,
+                &effect_name,
                 effect_index,
                 &item.name,
             ) else {
