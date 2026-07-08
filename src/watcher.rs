@@ -81,7 +81,7 @@ impl Drop for WatcherThread {
 
 pub fn refresh_bindings() {
     let update_bindings = crate::EDIT_HANDLE
-        .call_read_section(update_keyframe_bindings)
+        .call_read_section(find_stale_keyframe_bindings)
         .map_err(anyhow::Error::from)
         .flatten();
     let change_bindings = match update_bindings {
@@ -98,7 +98,7 @@ pub fn refresh_bindings() {
     }
 }
 
-fn update_keyframe_bindings(
+fn find_stale_keyframe_bindings(
     read: &aviutl2::generic::ReadSection,
 ) -> aviutl2::common::AnyResult<
     indexmap::IndexMap<crate::KeyframeBinding, crate::KeyframeTrackParams>,
@@ -106,6 +106,10 @@ fn update_keyframe_bindings(
     let info = crate::EDIT_HANDLE.get_edit_info();
     let mut bindings =
         indexmap::IndexMap::<crate::KeyframeTrackParams, Vec<crate::KeyframeBinding>>::new();
+    tracing::info!(
+        "Scanning for keyframe track params in {} layers",
+        info.layer_max + 1
+    );
 
     for layer in 0..=info.layer_max {
         for (_, object) in read.objects_in_layer(layer) {
