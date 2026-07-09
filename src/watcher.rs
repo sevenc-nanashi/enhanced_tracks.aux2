@@ -199,7 +199,18 @@ fn find_stale_keyframe_bindings(
                 let current_frames = object_keyframe_frames(read, binding.object)?;
                 crate::KEYFRAMES.insert(
                     new_params,
-                    crate::keyframe::Keyframes::new(current_frames.len()),
+                    crate::KEYFRAMES
+                        .get(params)
+                        .map(|k| {
+                            tracing::info!(
+                                "Migrating keyframe track params {:?} for effect {:?} to new scene id {:?}",
+                                params,
+                                effect_key,
+                                new_params.scene_id
+                            );
+                            k.clone()
+                        })
+                        .unwrap_or_else(|| crate::keyframe::Keyframes::new(current_frames.len())),
                 );
                 crate::KEYFRAME_FRAMES.insert(new_params, current_frames);
                 change_bindings.insert(binding.clone(), new_params);
