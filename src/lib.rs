@@ -257,7 +257,10 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
     fn plugin_info(&self) -> aviutl2::generic::GenericPluginTable {
         aviutl2::generic::GenericPluginTable {
             name: "enhanced_tracks.aux2".into(),
-            information: "".into(),
+            information: format!(
+                "Enhanced Track Movement / v{} / https://github.com/sevenc-nanashi/enhanced_tracks.aux2",
+                env!("CARGO_PKG_VERSION")
+            ),
         }
     }
 
