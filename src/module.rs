@@ -103,7 +103,7 @@ fn resolve_keyframe_at_index(
 
     let mut indices = Vec::with_capacity(keyframes.len() - easing_index);
     indices.push(easing_index as i32);
-    for i in (index + 1)..keyframes.len() {
+    for i in (easing_index + 1)..keyframes.len() {
         match &keyframes[i] {
             _ if i == keyframes.len() - 1 => {
                 indices.push(i as i32);

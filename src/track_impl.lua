@@ -188,10 +188,13 @@ local function patched_getpoint(...)
     return #indices
   elseif target == "timecontrol" then
     local indices_count = #indices
-    local target_time = option2 or obj_getpoint("time")
     local left_time = obj_getpoint("time", indices[1])
     local right_time = obj_getpoint("time", indices[indices_count])
     local duration = right_time - left_time
+    local target_time = option2
+    if target_time == nil then
+      target_time = obj_getpoint("time") - left_time
+    end
     local ratio = target_time / duration
     local bank_id = state[1]
     local keyframe_id = state[2]
