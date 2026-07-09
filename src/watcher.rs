@@ -219,11 +219,10 @@ fn find_stale_keyframe_bindings(
                         crate::KEYFRAME_FRAMES.insert(*params, current_frames);
                     }
                     Some(existing_keyframes)
-                        if existing_keyframes.keyframes.len() != current_frames.len()
-                            || keyframe_frames_changed(params, &current_frames) =>
+                        if existing_keyframes.keyframes.len() != current_frames.len() =>
                     {
                         tracing::info!(
-                            "Keyframe track params {:?} for effect {:?} has changed frames ({} keyframes in global map, {} frames in object)",
+                            "Keyframe track params {:?} for effect {:?} has different number of keyframes ({} in global map, {} frames in object)",
                             params,
                             effect_key,
                             existing_keyframes.keyframes.len(),
@@ -251,12 +250,6 @@ fn find_stale_keyframe_bindings(
     }
 
     Ok(change_bindings)
-}
-
-fn keyframe_frames_changed(params: &crate::KeyframeTrackParams, current_frames: &[usize]) -> bool {
-    crate::KEYFRAME_FRAMES
-        .get(params)
-        .is_some_and(|previous_frames| previous_frames.as_slice() != current_frames)
 }
 
 fn remap_keyframes_to_current_frames(
