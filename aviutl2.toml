@@ -6,9 +6,12 @@ name = "enhanced_tracks.aux2"
 version = "0.1.0"
 
 [artifacts.enhanced_tracks-aux2-tra2]
-destination = "Script/enhanced_tracks.aux2.tra2"
-source = "build/enhanced_tracks.aux2.tra2"
-build = "aulua build"
+destination = "Script/enhanced_tracks-aux2/enhanced_tracks.aux2.tra2"
+source = "src/track.lua"
+
+[artifacts.enhanced_tracks-core]
+destination = "Script/enhanced_tracks-aux2/enhanced_tracks_core.lua"
+source = "src/track_impl.lua"
 
 [artifacts.embedded-tra2]
 destination = "Script/@embedded.tra2"

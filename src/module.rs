@@ -29,7 +29,6 @@ impl aviutl2::module::ScriptModule for KeyframesMod2 {
 impl KeyframesMod2 {
     #[expect(clippy::type_complexity)]
     fn get_keyframe(
-        &self,
         bank_id: i32,
         track_id: i32,
         scene_id: i32,
@@ -116,7 +115,6 @@ impl KeyframesMod2 {
     }
 
     fn get_timecontrol_value(
-        &self,
         bank_id: i32,
         track_id: i32,
         scene_id: i32,
@@ -146,13 +144,12 @@ impl KeyframesMod2 {
         Ok(keyframe.timecontrol.y_at_x(x))
     }
 
-    fn resolve_segment(&self, point_count: i32, segment: f64, local_t: f64) -> (i32, f64) {
+    fn resolve_segment(point_count: i32, segment: f64, local_t: f64) -> (i32, f64) {
         assert!(point_count >= 0, "point_count must be non-negative");
         crate::std_common::resolve_segment(point_count as usize, segment, local_t)
     }
 
     fn linear_value(
-        &self,
         values: Vec<f64>,
         segment: f64,
         local_t: f64,
@@ -163,7 +160,6 @@ impl KeyframesMod2 {
     }
 
     fn segment_lengths(
-        &self,
         axis1: Vec<f64>,
         axis2: Vec<f64>,
         axis3: Vec<f64>,
@@ -174,7 +170,6 @@ impl KeyframesMod2 {
     }
 
     fn weighted_segment(
-        &self,
         axis1: Vec<f64>,
         axis2: Vec<f64>,
         axis3: Vec<f64>,
@@ -187,7 +182,6 @@ impl KeyframesMod2 {
 
     #[expect(clippy::too_many_arguments)]
     fn catmull_rom(
-        &self,
         start_prev: f64,
         start_value: f64,
         end_value: f64,
@@ -210,7 +204,6 @@ impl KeyframesMod2 {
     }
 
     fn interpolation_value(
-        &self,
         values: Vec<f64>,
         lengths: Vec<f64>,
         segment: f64,
@@ -228,12 +221,11 @@ impl KeyframesMod2 {
         )
     }
 
-    fn build_rotation_series(&self, values: Vec<f64>, period: f64) -> Vec<f64> {
+    fn build_rotation_series(values: Vec<f64>, period: f64) -> Vec<f64> {
         crate::std_common::build_rotation_series(&values, period)
     }
 
     fn euler_quat_at(
-        &self,
         axis1: Vec<f64>,
         axis2: Vec<f64>,
         axis3: Vec<f64>,
@@ -243,12 +235,11 @@ impl KeyframesMod2 {
         crate::std_common::euler_quat_at(&axis1, &axis2, &axis3, index, &order).to_vec()
     }
 
-    fn quat_slerp(&self, a: Vec<f64>, b: Vec<f64>, t: f64) -> Vec<f64> {
+    fn quat_slerp(a: Vec<f64>, b: Vec<f64>, t: f64) -> Vec<f64> {
         crate::std_common::quat_slerp(vec_to_quat(a), vec_to_quat(b), t).to_vec()
     }
 
     fn rotation_component_from_quat(
-        &self,
         axis_index: i32,
         rotation_order: String,
         quat: Vec<f64>,
@@ -270,5 +261,12 @@ impl KeyframesMod2 {
     }
     fn reset_cache_cleared(&self) {
         CACHE_CLEARED.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn current_time(&self) -> f64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64()
     }
 }

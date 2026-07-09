@@ -6,10 +6,6 @@ build:
   out_dir: build
 
 scripts:
-  - name: enhanced_tracks.aux2.tra2
-    sources:
-      - path: src/track.lua
-
   - name: "@embedded.tra2"
     sources:
       - label: 直線移動
