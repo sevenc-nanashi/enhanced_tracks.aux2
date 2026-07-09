@@ -130,8 +130,7 @@ fn find_stale_keyframe_bindings(
             }
             if params.bank_id == 0 {
                 tracing::debug!(
-                    "Uninitialized keyframe track params {:?} for effect {:?}, skipping",
-                    params,
+                    "Uninitialized keyframe track params for effect {:?}, skipping",
                     effect_key
                 );
                 continue;

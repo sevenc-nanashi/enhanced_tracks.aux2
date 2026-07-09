@@ -1085,7 +1085,7 @@ impl KeyframesGui {
         [x, origin[1] + tangent[1] * scale]
     }
 
-    pub(in crate::gui) fn update_timecontrol_editor_target(
+    pub fn update_timecontrol_editor_target(
         &mut self,
         read: &aviutl2::generic::ReadSection,
     ) -> aviutl2::common::AnyResult<()> {

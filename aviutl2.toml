@@ -34,6 +34,7 @@ source = "i18n/English.aul2"
 [development]
 aviutl2_version = "latest"
 catalog_dependencies = [
+  "Garech.DoubleBPMGrid",
   "KuroNeko.CopyAlias",
   "sigma-axis.Basic_S",
   "sevenc-nanashi.insert-aux2",

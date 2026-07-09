@@ -74,12 +74,11 @@ impl KeyframesGui {
                 .sense(egui::Sense::click()),
             )
             .clicked()
+            && ui.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.modifiers.alt)
         {
             self.debug_counter += 1;
             if self.debug_counter >= 5 {
-                let debug_mode = self.debug_counter.is_multiple_of(2);
-                tracing::info!("Setting debug mode to {}", debug_mode);
-                crate::module::DEBUG_MODE.store(debug_mode, std::sync::atomic::Ordering::Relaxed);
+                self.debug_view = true;
             }
         }
         ui.push_id(selected_object_info.handle, |ui| {

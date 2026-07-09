@@ -15,6 +15,8 @@ struct KeyframesAux2 {
     mod2: aviutl2::generic::SubPlugin<crate::module::KeyframesMod2>,
     watcher: watcher::WatcherThread,
     gui: aviutl2_eframe::EframeWindow,
+
+    last_scene_id: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -246,6 +248,7 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
             mod2: aviutl2::generic::SubPlugin::new_script_module(&info)?,
             watcher: watcher::WatcherThread::start(),
             gui: aviutl2_eframe::EframeWindow::new("enhanced_tracks.aux2", crate::gui::create_gui)?,
+            last_scene_id: -1,
         })
     }
 
@@ -323,13 +326,21 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
 
     fn event_change_scene_info(&mut self) {
         let update = EDIT_HANDLE.call_read_section(|edit| {
-            {
-                let mut current_bank_id = CURRENT_BANK.lock().unwrap();
-                *current_bank_id += 1;
-            }
             let info = EDIT_HANDLE.get_edit_info();
-            clear_unused_keyframes(&info, edit);
-            self.watcher.notify_object_change();
+            if info.scene_id != self.last_scene_id {
+                tracing::info!(
+                    "Scene changed from {} to {}, clearing unused keyframes",
+                    self.last_scene_id,
+                    info.scene_id
+                );
+                {
+                    let mut current_bank_id = CURRENT_BANK.lock().unwrap();
+                    *current_bank_id += 1;
+                }
+                clear_unused_keyframes(&info, edit);
+                self.watcher.notify_object_change();
+            }
+            self.last_scene_id = info.scene_id;
         });
         if let Err(e) = update {
             tracing::error!("Failed to run callback on scene change: {:?}", e);

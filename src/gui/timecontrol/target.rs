@@ -29,7 +29,7 @@ impl KeyframesGui {
         }
     }
 
-    pub(in crate::gui) fn render_timecontrol_editor(&mut self, ui: &mut egui::Ui) {
+    pub fn render_timecontrol_editor(&mut self, ui: &mut egui::Ui) {
         let Some(mut target) = self.timecontrol_editor.clone() else {
             return;
         };

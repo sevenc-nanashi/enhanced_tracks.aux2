@@ -3,6 +3,7 @@ use aviutl2::generic::GenericPlugin;
 use aviutl2_eframe::{eframe, egui};
 use tap::prelude::*;
 
+mod debug_view;
 mod keyframes;
 mod timecontrol;
 
@@ -13,6 +14,7 @@ pub struct KeyframesGui {
     pub easing_search_text: String,
     pub keyframe_timeline_view: KeyframeTimelineView,
     pub debug_counter: usize,
+    pub debug_view: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -302,6 +304,7 @@ pub fn create_gui(
         easing_search_text: String::new(),
         keyframe_timeline_view: KeyframeTimelineView::default(),
         debug_counter: 0,
+        debug_view: false,
     }))
 }
 
@@ -341,6 +344,9 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
 
         egui::CentralPanel::default().show(ui, |ui| {
             if crate::EDIT_HANDLE.is_ready() {
+                if self.debug_view {
+                    self.render_debug_view(ui);
+                }
                 if self.is_undo_mode() {
                     self.render_undo_mode_warning(ui);
                 } else if self.timecontrol_editor.is_some() {
