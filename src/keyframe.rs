@@ -31,6 +31,9 @@ pub struct Keyframes {
 }
 impl Keyframes {
     pub fn new(num_keyframes: usize) -> Self {
+        if num_keyframes <= 1 {
+            panic!("num_keyframes must be greater than 1");
+        }
         let mut keyframes = vec![Keyframe::default(); num_keyframes];
         keyframes[0] = Keyframe::Easing(EasingKeyframeInfo::default());
         Self { keyframes }
@@ -47,6 +50,7 @@ impl Keyframes {
         } else {
             self.keyframes.truncate(num_keyframes);
         }
+        self.force_last_midpoint();
     }
 
     pub fn remap_to_frames(&self, old_frames: &[usize], new_frames: &[usize]) -> Self {
@@ -90,7 +94,17 @@ impl Keyframes {
                 });
         }
 
-        Self { keyframes }
+        let mut keyframes = Self { keyframes };
+        keyframes.force_last_midpoint();
+        keyframes
+    }
+
+    fn force_last_midpoint(&mut self) {
+        let last = self
+            .keyframes
+            .last_mut()
+            .expect("keyframes must not be empty");
+        *last = Keyframe::Midpoint;
     }
 
     fn easing_at_or_before_frame(
@@ -1397,10 +1411,24 @@ mod tests {
         let remapped = keyframes.remap_to_frames(&[10, 20, 30, 40], &[10, 20, 30]);
 
         assert!(matches!(remapped.keyframes[1], Keyframe::Ignored));
+        assert!(matches!(remapped.keyframes[2], Keyframe::Midpoint));
+    }
+
+    #[test]
+    fn remap_to_frames_preserves_exact_frame_keyframes_except_last() {
+        let mut keyframes = Keyframes::new(5);
+        keyframes.keyframes[2] = Keyframe::Easing(EasingKeyframeInfo {
+            easing: "middle".to_string(),
+            ..Default::default()
+        });
+
+        let remapped = keyframes.remap_to_frames(&[10, 20, 30, 40, 50], &[10, 20, 30, 40]);
+
         let Keyframe::Easing(third) = &remapped.keyframes[2] else {
             panic!("third keyframe must be easing");
         };
         assert_eq!(third.easing, "middle");
+        assert!(matches!(remapped.keyframes[3], Keyframe::Midpoint));
     }
 
     #[test]
@@ -1410,5 +1438,18 @@ mod tests {
         let remapped = keyframes.remap_to_frames(&[10, 40], &[10, 20, 40]);
 
         assert!(matches!(remapped.keyframes[1], Keyframe::Midpoint));
+    }
+
+    #[test]
+    fn resize_forces_last_midpoint() {
+        let mut keyframes = Keyframes::new(4);
+        keyframes.keyframes[2] = Keyframe::Easing(EasingKeyframeInfo {
+            easing: "middle".to_string(),
+            ..Default::default()
+        });
+
+        keyframes.resize(3);
+
+        assert!(matches!(keyframes.keyframes[2], Keyframe::Midpoint));
     }
 }

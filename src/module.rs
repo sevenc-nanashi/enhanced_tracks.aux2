@@ -51,11 +51,25 @@ impl KeyframesMod2 {
             scene_id: scene_id as _,
             project_session_nonce: project_session_nonce as _,
         };
-        let keyframes = crate::KEYFRAMES.get(&param).with_context(|| {
+        let mut keyframes = crate::KEYFRAMES.get_mut(&param).with_context(|| {
             format!(
                 "keyframes not found for bank_id: {bank_id}, track_id: {track_id}, scene_id: {scene_id}, project_session_nonce: {project_session_nonce}"
             )
         })?;
+        {
+            let Some(last_keyframe) = keyframes.keyframes.last_mut() else {
+                tracing::error!(
+                    "unreachable: keyframes is empty for bank_id: {bank_id}, track_id: {track_id}, scene_id: {scene_id}, project_session_nonce: {project_session_nonce}"
+                );
+                return Err(anyhow::anyhow!("keyframes is empty"));
+            };
+            if !matches!(last_keyframe, crate::keyframe::Keyframe::Midpoint) {
+                tracing::warn!(
+                    "unreachable: last keyframe is not Midpoint for bank_id: {bank_id}, track_id: {track_id}, scene_id: {scene_id}, project_session_nonce: {project_session_nonce}"
+                );
+                *last_keyframe = crate::keyframe::Keyframe::Midpoint;
+            }
+        }
         let (index, keyframe) = keyframes
             .keyframes
             .iter()
