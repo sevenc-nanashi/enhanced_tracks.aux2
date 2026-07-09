@@ -46,7 +46,7 @@ jobs:
 
       - name: Build package
         run: |
-          au2 release
+          au2 release --set-version "${{ github.event.inputs.version }}"
 
       - name: Commit version change
         run: |
