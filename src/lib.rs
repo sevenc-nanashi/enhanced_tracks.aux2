@@ -38,6 +38,8 @@ pub static OBJECT_ID_TO_HANDLE: std::sync::LazyLock<
 pub static KEYFRAMES: std::sync::LazyLock<
     dashmap::DashMap<KeyframeTrackParams, crate::keyframe::Keyframes>,
 > = std::sync::LazyLock::new(dashmap::DashMap::new);
+pub static KEYFRAME_FRAMES: std::sync::LazyLock<dashmap::DashMap<KeyframeTrackParams, Vec<usize>>> =
+    std::sync::LazyLock::new(dashmap::DashMap::new);
 pub static CURRENT_BANK: std::sync::LazyLock<std::sync::Mutex<usize>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(1));
 pub static CURRENT_KEYFRAMES_ID: std::sync::LazyLock<std::sync::Mutex<usize>> =
@@ -303,6 +305,7 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
         let keyframes: Vec<(KeyframeTrackParams, crate::keyframe::Keyframes)> =
             project.deserialize("keyframes").unwrap_or_default();
         KEYFRAMES.clear();
+        KEYFRAME_FRAMES.clear();
         for (params, keyframes) in keyframes.into_iter() {
             KEYFRAMES.insert(params, keyframes);
         }

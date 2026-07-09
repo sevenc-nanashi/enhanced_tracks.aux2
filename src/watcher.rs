@@ -1,5 +1,11 @@
 use anyhow::Context;
 
+type MigrationKey = (
+    crate::KeyframeTrackParams,
+    aviutl2::generic::ObjectHandle,
+    aviutl2::generic::EffectHandle,
+);
+
 pub static RESOLVED_MIGRATIONS: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashSet<crate::KeyframeTrackParams>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
@@ -119,8 +125,8 @@ fn find_stale_keyframe_bindings(
 
     let mut change_bindings =
         indexmap::IndexMap::<crate::KeyframeBinding, crate::KeyframeTrackParams>::new();
-    let mut migrations =
-        std::collections::HashMap::<crate::KeyframeTrackParams, crate::KeyframeTrackParams>::new();
+    let mut object_migrations =
+        std::collections::HashMap::<MigrationKey, crate::KeyframeTrackParams>::new();
     let resolved_migrations = RESOLVED_MIGRATIONS.lock().unwrap();
     for (params, bindings) in &bindings {
         for binding in bindings {
@@ -143,6 +149,7 @@ fn find_stale_keyframe_bindings(
                     crate::current_project_session_nonce()
                 );
                 if let Some(keyframe) = crate::KEYFRAMES.get(params).map(|k| k.clone()) {
+                    let current_frames = object_keyframe_frames(read, binding.object)?;
                     tracing::info!(
                         "Migrating keyframe track params {:?} for effect {:?}",
                         params,
@@ -153,9 +160,11 @@ fn find_stale_keyframe_bindings(
                         scene_id: info.scene_id,
                         ..*params
                     };
+                    let keyframe =
+                        remap_keyframes_to_current_frames(params, &keyframe, &current_frames);
                     crate::KEYFRAMES.insert(new_params, keyframe);
+                    crate::KEYFRAME_FRAMES.insert(new_params, current_frames);
                     change_bindings.insert(binding.clone(), new_params);
-                    migrations.insert(*params, new_params);
                 } else {
                     tracing::warn!(
                         "Keyframe track params {:?} for effect {:?} has different project session nonce but no keyframes found in global map, possibly due to copying from another project session.",
@@ -167,11 +176,13 @@ fn find_stale_keyframe_bindings(
                         scene_id: info.scene_id,
                         ..*params
                     };
-                    let num_keyframes = read.get_object_section_num(binding.object)? + 1;
-                    crate::KEYFRAMES
-                        .insert(new_params, crate::keyframe::Keyframes::new(num_keyframes));
+                    let current_frames = object_keyframe_frames(read, binding.object)?;
+                    crate::KEYFRAMES.insert(
+                        new_params,
+                        crate::keyframe::Keyframes::new(current_frames.len()),
+                    );
+                    crate::KEYFRAME_FRAMES.insert(new_params, current_frames);
                     change_bindings.insert(binding.clone(), new_params);
-                    migrations.insert(*params, new_params);
                 }
             } else if params.scene_id != info.scene_id {
                 tracing::info!(
@@ -185,12 +196,15 @@ fn find_stale_keyframe_bindings(
                     scene_id: info.scene_id,
                     ..*params
                 };
-                let num_keyframes = read.get_object_section_num(binding.object)? + 1;
-                crate::KEYFRAMES.insert(new_params, crate::keyframe::Keyframes::new(num_keyframes));
+                let current_frames = object_keyframe_frames(read, binding.object)?;
+                crate::KEYFRAMES.insert(
+                    new_params,
+                    crate::keyframe::Keyframes::new(current_frames.len()),
+                );
+                crate::KEYFRAME_FRAMES.insert(new_params, current_frames);
                 change_bindings.insert(binding.clone(), new_params);
-                migrations.insert(*params, new_params);
             } else {
-                let num_keyframes = read.get_object_section_num(binding.object)? + 1;
+                let current_frames = object_keyframe_frames(read, binding.object)?;
                 match crate::KEYFRAMES.get(params) {
                     None => {
                         tracing::info!(
@@ -198,36 +212,95 @@ fn find_stale_keyframe_bindings(
                             params,
                             effect_key
                         );
-                        crate::KEYFRAMES
-                            .insert(*params, crate::keyframe::Keyframes::new(num_keyframes));
+                        crate::KEYFRAMES.insert(
+                            *params,
+                            crate::keyframe::Keyframes::new(current_frames.len()),
+                        );
+                        crate::KEYFRAME_FRAMES.insert(*params, current_frames);
                     }
                     Some(existing_keyframes)
-                        if existing_keyframes.keyframes.len() != num_keyframes =>
+                        if existing_keyframes.keyframes.len() != current_frames.len()
+                            || keyframe_frames_changed(params, &current_frames) =>
                     {
                         tracing::info!(
-                            "Keyframe track params {:?} for effect {:?} has different number of keyframes ({} in global map, {} in object)",
+                            "Keyframe track params {:?} for effect {:?} has changed frames ({} keyframes in global map, {} frames in object)",
                             params,
                             effect_key,
                             existing_keyframes.keyframes.len(),
-                            num_keyframes
+                            current_frames.len()
                         );
-                        let new_params = *migrations
-                            .entry(*params)
+                        let migration_key = (*params, binding.object, binding.effect);
+                        let new_params = *object_migrations
+                            .entry(migration_key)
                             .or_insert_with(|| crate::KeyframeTrackParams::new(info.scene_id));
-                        let mut new_keyframes = existing_keyframes.clone();
-                        drop(existing_keyframes);
-                        new_keyframes.resize(num_keyframes);
+                        let new_keyframes = remap_keyframes_to_current_frames(
+                            params,
+                            &existing_keyframes,
+                            &current_frames,
+                        );
                         crate::KEYFRAMES.insert(new_params, new_keyframes);
+                        crate::KEYFRAME_FRAMES.insert(new_params, current_frames);
                         change_bindings.insert(binding.clone(), new_params);
-                        migrations.insert(*params, new_params);
                     }
-                    Some(_) => {}
+                    Some(_) => {
+                        crate::KEYFRAME_FRAMES.insert(*params, current_frames);
+                    }
                 };
             }
         }
     }
 
     Ok(change_bindings)
+}
+
+fn keyframe_frames_changed(params: &crate::KeyframeTrackParams, current_frames: &[usize]) -> bool {
+    crate::KEYFRAME_FRAMES
+        .get(params)
+        .is_some_and(|previous_frames| previous_frames.as_slice() != current_frames)
+}
+
+fn remap_keyframes_to_current_frames(
+    params: &crate::KeyframeTrackParams,
+    keyframes: &crate::keyframe::Keyframes,
+    current_frames: &[usize],
+) -> crate::keyframe::Keyframes {
+    let Some(previous_frames) = crate::KEYFRAME_FRAMES
+        .get(params)
+        .map(|frames| frames.clone())
+    else {
+        let mut resized = keyframes.clone();
+        resized.resize(current_frames.len());
+        return resized;
+    };
+    if previous_frames.len() != keyframes.keyframes.len() {
+        tracing::warn!(
+            "Stored frame count for keyframe track params {:?} does not match keyframe count ({} vs {})",
+            params,
+            previous_frames.len(),
+            keyframes.keyframes.len()
+        );
+        let mut resized = keyframes.clone();
+        resized.resize(current_frames.len());
+        return resized;
+    }
+    keyframes.remap_to_frames(&previous_frames, current_frames)
+}
+
+fn object_keyframe_frames(
+    read: &aviutl2::generic::ReadSection,
+    object: aviutl2::generic::ObjectHandle,
+) -> aviutl2::common::AnyResult<Vec<usize>> {
+    let section_num = read.get_object_section_num(object)?;
+    let mut frames = Vec::with_capacity(section_num + 1);
+    for section in 0..section_num {
+        frames.push(
+            read.get_object_section_frame(object, section)?
+                .ok_or_else(|| anyhow::anyhow!("Failed to get frame for section {section}"))?,
+        );
+    }
+    let last_frame = read.get_object_layer_frame(object)?;
+    frames.push(last_frame.end + 1);
+    Ok(frames)
 }
 
 fn apply_bindings_change(

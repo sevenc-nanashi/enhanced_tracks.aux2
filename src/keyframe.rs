@@ -48,6 +48,66 @@ impl Keyframes {
             self.keyframes.truncate(num_keyframes);
         }
     }
+
+    pub fn remap_to_frames(&self, old_frames: &[usize], new_frames: &[usize]) -> Self {
+        if old_frames.len() != self.keyframes.len() {
+            panic!("old_frames length must match keyframes length");
+        }
+        if new_frames.len() <= 1 {
+            panic!("new_frames length must be greater than 1");
+        }
+
+        let old_frame_indices = old_frames
+            .iter()
+            .enumerate()
+            .map(|(index, frame)| (*frame, index))
+            .collect::<std::collections::HashMap<_, _>>();
+        let mut keyframes = Vec::with_capacity(new_frames.len());
+
+        for (new_index, frame) in new_frames.iter().enumerate() {
+            if new_index == 0 {
+                keyframes.push(
+                    self.easing_at_or_before_frame(old_frames, *frame)
+                        .map_or_else(Keyframe::default, |keyframe| {
+                            Keyframe::Easing(keyframe.clone())
+                        }),
+                );
+                continue;
+            }
+
+            let Some(old_index) = old_frame_indices.get(frame) else {
+                keyframes.push(Keyframe::Midpoint);
+                continue;
+            };
+            keyframes.push(self.keyframes[*old_index].clone());
+        }
+
+        if !matches!(keyframes[0], Keyframe::Easing(_)) {
+            keyframes[0] = self
+                .easing_at_or_before_frame(old_frames, new_frames[0])
+                .map_or_else(Keyframe::default, |keyframe| {
+                    Keyframe::Easing(keyframe.clone())
+                });
+        }
+
+        Self { keyframes }
+    }
+
+    fn easing_at_or_before_frame(
+        &self,
+        frames: &[usize],
+        target_frame: usize,
+    ) -> Option<&EasingKeyframeInfo> {
+        frames
+            .iter()
+            .zip(&self.keyframes)
+            .take_while(|(frame, _)| **frame <= target_frame)
+            .filter_map(|(_, keyframe)| match keyframe {
+                Keyframe::Easing(keyframe) => Some(keyframe),
+                Keyframe::Ignored | Keyframe::Midpoint => None,
+            })
+            .last()
+    }
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -1302,5 +1362,53 @@ mod tests {
                 preset.timecontrol.y_at_x(1.0)
             );
         }
+    }
+
+    #[test]
+    fn remap_to_frames_clones_previous_easing_for_split_start() {
+        let mut keyframes = Keyframes::new(3);
+        keyframes.keyframes[0] = Keyframe::Easing(EasingKeyframeInfo {
+            easing: "first".to_string(),
+            ..Default::default()
+        });
+        keyframes.keyframes[2] = Keyframe::Easing(EasingKeyframeInfo {
+            easing: "second".to_string(),
+            ..Default::default()
+        });
+
+        let remapped = keyframes.remap_to_frames(&[10, 20, 30], &[15, 20]);
+
+        let Keyframe::Easing(first) = &remapped.keyframes[0] else {
+            panic!("first keyframe must be easing");
+        };
+        assert_eq!(first.easing, "first");
+        assert!(matches!(remapped.keyframes[1], Keyframe::Midpoint));
+    }
+
+    #[test]
+    fn remap_to_frames_preserves_exact_frame_keyframes() {
+        let mut keyframes = Keyframes::new(4);
+        keyframes.keyframes[1] = Keyframe::Ignored;
+        keyframes.keyframes[2] = Keyframe::Easing(EasingKeyframeInfo {
+            easing: "middle".to_string(),
+            ..Default::default()
+        });
+
+        let remapped = keyframes.remap_to_frames(&[10, 20, 30, 40], &[10, 20, 30]);
+
+        assert!(matches!(remapped.keyframes[1], Keyframe::Ignored));
+        let Keyframe::Easing(third) = &remapped.keyframes[2] else {
+            panic!("third keyframe must be easing");
+        };
+        assert_eq!(third.easing, "middle");
+    }
+
+    #[test]
+    fn remap_to_frames_uses_midpoint_for_new_non_initial_frames() {
+        let keyframes = Keyframes::new(2);
+
+        let remapped = keyframes.remap_to_frames(&[10, 40], &[10, 20, 40]);
+
+        assert!(matches!(remapped.keyframes[1], Keyframe::Midpoint));
     }
 }
