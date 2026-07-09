@@ -1,5 +1,21 @@
 local mod = obj.module("enhanced_tracks.aux2")
 local ffi = require("ffi")
+local obj_getpoint = obj.getpoint
+
+local SCRIPT_CACHE = {}
+local PATCHED_MODULES = {
+  ["enhanced_tracks.aux2"] = true,
+  ffi = true,
+  bit = true,
+  bit32 = true,
+  math = true,
+  table = true,
+  string = true,
+  os = true,
+  io = true,
+  coroutine = true,
+  package = true,
+}
 
 local function require_with_env(name, env)
   if package.loaded[name] ~= nil then
@@ -33,7 +49,7 @@ end
 
 local function create_patched_require(inner_G, o_script_dir)
   local patched_require = function(name)
-    if name == "enhanced_tracks.aux2" or name == "ffi" or name == "bit" or name == "bit32" or name == "math" or name == "table" or name == "string" or name == "os" or name == "io" or name == "coroutine" or name == "package" then
+    if PATCHED_MODULES[name] then
       return require(name)
     end
 
@@ -88,23 +104,32 @@ end
 
 local function patched_getpoint(...)
   if ENHANCED_TRACKS_STATE == nil then
-    return obj.getpoint(...)
+    return obj_getpoint(...)
   end
-  local bank_id, keyframe_id, scene_id, project_session_nonce, index, indices, accelerate, decelerate, params =
-      unpack(
-        ENHANCED_TRACKS_STATE)
+  local state = ENHANCED_TRACKS_STATE
+  local indices = state[6]
   if mod.debug_mode() then
+    local bank_id = state[1]
+    local keyframe_id = state[2]
+    local scene_id = state[3]
+    local project_session_nonce = state[4]
+    local index = state[5]
+    local accelerate = state[7]
+    local decelerate = state[8]
+    local params = state[9]
     print("== Keyframe Track Debug Info @ getpoint ==")
+    print("Bank ID:", bank_id)
+    print("Keyframe ID:", keyframe_id)
+    print("Scene ID:", scene_id)
+    print("Project Session Nonce:", project_session_nonce)
+    print("Index:", index)
     print("Indices:", indices)
     print("Accelerate:", accelerate)
     print("Decelerate:", decelerate)
     print("Params:", params)
     print("Arguments:", { ... })
   end
-  local args = { ... }
-  local target = args[1]
-  local option = args[2]
-  local option2 = args[3]
+  local target, option, option2 = ...
   if type(target) == "number" then
     local remapped_index = indices[target + 1]
     if target < 0 then
@@ -112,10 +137,10 @@ local function patched_getpoint(...)
     elseif target >= #indices then
       remapped_index = indices[#indices]
     end
-    if #args > 1 then
-      return obj.getpoint(remapped_index, option)
+    if select("#", ...) > 1 then
+      return obj_getpoint(remapped_index, option)
     else
-      return obj.getpoint(remapped_index)
+      return obj_getpoint(remapped_index)
     end
   elseif target == "time" then
     if option then
@@ -125,74 +150,84 @@ local function patched_getpoint(...)
       elseif option >= #indices then
         remapped_index = indices[#indices]
       end
-      return obj.getpoint("time", remapped_index) - obj.getpoint("time", indices[1])
+      local first_time = obj_getpoint("time", indices[1])
+      return obj_getpoint("time", remapped_index) - first_time
     else
-      return obj.getpoint("time") - obj.getpoint("time", indices[1])
+      local first_time = obj_getpoint("time", indices[1])
+      return obj_getpoint("time") - first_time
     end
   elseif target == "frame_s" then
     local starting_index = indices[1]
-    local starting_time = obj.getpoint("time", starting_index)
-    return obj.getpoint("frame_s") + starting_time
+    local starting_time = obj_getpoint("time", starting_index)
+    return obj_getpoint("frame_s") + starting_time
   elseif target == "frame_e" then
     local ending_index = indices[#indices]
-    local ending_time = obj.getpoint("time", ending_index)
-    return obj.getpoint("frame_s") + ending_time
+    local ending_time = obj_getpoint("time", ending_index)
+    return obj_getpoint("frame_s") + ending_time
   elseif target == "accelerate" then
-    return accelerate
+    return state[7]
   elseif target == "decelerate" then
-    return decelerate
+    return state[8]
   elseif target == "index" then
-    local current_time = obj.getpoint("time")
-    for i = 1, #indices - 1 do
-      local left_time = obj.getpoint("time", indices[i])
-      local right_time = obj.getpoint("time", indices[i + 1])
+    local current_time = obj_getpoint("time")
+    local indices_count = #indices
+    local left_time = obj_getpoint("time", indices[1])
+    for i = 1, indices_count - 1 do
+      local right_time = obj_getpoint("time", indices[i + 1])
       if current_time < left_time then
         return i - 1
       elseif current_time < right_time then
         return i - 1 + (current_time - left_time) / (right_time - left_time)
       end
+      left_time = right_time
     end
-    return #indices - 1
+    return indices_count - 1
   elseif target == "param" then
-    return unpack(params)
+    return unpack(state[9])
   elseif target == "num" then
     return #indices
   elseif target == "timecontrol" then
-    local target_time = option2 or obj.getpoint("time")
-    local left_time = obj.getpoint("time", indices[1])
-    local right_time = obj.getpoint("time", indices[#indices])
-    local ratio = target_time / (right_time - left_time)
+    local indices_count = #indices
+    local target_time = option2 or obj_getpoint("time")
+    local left_time = obj_getpoint("time", indices[1])
+    local right_time = obj_getpoint("time", indices[indices_count])
+    local duration = right_time - left_time
+    local ratio = target_time / duration
+    local bank_id = state[1]
+    local keyframe_id = state[2]
+    local scene_id = state[3]
+    local project_session_nonce = state[4]
+    local index = state[5]
     local value = mod.get_timecontrol_value(bank_id, keyframe_id, scene_id, project_session_nonce, index, ratio)
     if option == "value" then
       return value
     end
-    local remapped_time = left_time + value * (right_time - left_time)
+    local remapped_time = left_time + value * duration
     if option == "time" then
       return remapped_time - left_time
     end
 
     if remapped_time < left_time then
-      local first_section_time = obj.getpoint("time", indices[1])
-      local second_section_time = obj.getpoint("time", indices[2])
-      return -1 + (remapped_time - first_section_time) / (second_section_time - first_section_time)
+      local second_section_time = obj_getpoint("time", indices[2])
+      return -1 + (remapped_time - left_time) / (second_section_time - left_time)
     end
-    for i = 1, #indices - 1 do
-      local ileft_time = obj.getpoint("time", indices[i])
-      local iright_time = obj.getpoint("time", indices[i + 1])
+    local ileft_time = left_time
+    for i = 1, indices_count - 1 do
+      local iright_time = obj_getpoint("time", indices[i + 1])
       if remapped_time < iright_time then
         return i - 1 + (remapped_time - ileft_time) / (iright_time - ileft_time)
       end
+      ileft_time = iright_time
     end
-    return #indices - 1 +
-        (remapped_time - obj.getpoint("time", indices[#indices])) /
-        (obj.getpoint("time", indices[#indices]) - obj.getpoint("time", indices[#indices - 1]))
+    local previous_time = obj_getpoint("time", indices[indices_count - 1])
+    return indices_count - 1 + (remapped_time - right_time) / (right_time - previous_time)
   else
-    return obj.getpoint(unpack(args))
+    return obj_getpoint(...)
   end
 end
 
 local function run_script(o_bank_id, o_keyframe_id, o_scene_id, o_project_session_nonce)
-  local o_index, o_ratio = math.modf(obj.getpoint("index"))
+  local o_index, o_ratio = math.modf(obj_getpoint("index"))
   local o_inspect = mod.debug_mode()
 
   if o_bank_id == 0 then
@@ -200,16 +235,15 @@ local function run_script(o_bank_id, o_keyframe_id, o_scene_id, o_project_sessio
       print("== Keyframe Track Debug Info ==")
       print("Bank ID is 0, falling back to linear track")
     end
-    local left = obj.getpoint(o_index)
-    local right = obj.getpoint(o_index + 1)
+    local left = obj_getpoint(o_index)
+    local right = obj_getpoint(o_index + 1)
     return left + (right - left) * o_ratio
   end
 
-  local o_indices, o_script_name, o_script_ptr, o_script_len, o_script_dir, o_accelerate, o_decelerate, o_params = mod
+  local o_indices, o_script_name, o_accelerate, o_decelerate, o_params = mod
       .get_keyframe(
         o_bank_id, o_keyframe_id, o_scene_id, o_project_session_nonce, o_index)
 
-  SCRIPT_CACHE = SCRIPT_CACHE or {}
   if mod.is_cache_cleared() then
     print("@info", "clearing script cache")
     SCRIPT_CACHE = {}
@@ -221,6 +255,7 @@ local function run_script(o_bank_id, o_keyframe_id, o_scene_id, o_project_sessio
     f = SCRIPT_CACHE[o_script_name]
   else
     local err
+    local o_script_ptr, o_script_len, o_script_dir = mod.get_script(o_script_name)
     local script = ffi.string(o_script_ptr, o_script_len)
     f, err = loadstring(script, o_script_name)
     if not f then

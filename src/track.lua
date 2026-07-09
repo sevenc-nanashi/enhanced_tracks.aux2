@@ -2,6 +2,7 @@
 --param:Keyframe ID,0
 --param:Scene ID,0
 --param:Project Session Nonce,0
+--label:
 
 -- NOTE: 行数が多すぎるとパースの時間がかかってパフォーマンスが劣化するので、requireで
 -- パースをキャッシュする

@@ -309,6 +309,7 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
             project.deserialize("keyframes").unwrap_or_default();
         KEYFRAMES.clear();
         KEYFRAME_FRAMES.clear();
+        crate::module::clear_runtime_caches();
         for (params, keyframes) in keyframes.into_iter() {
             KEYFRAMES.insert(params, keyframes);
         }
@@ -362,6 +363,7 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
                 tracing::error!("Failed to reload easings: {:?}", e);
             }
         }
+        crate::module::clear_runtime_caches();
         crate::module::CACHE_CLEARED.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
