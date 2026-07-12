@@ -338,10 +338,6 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
         ui: &mut aviutl2_eframe::egui::Ui,
         _frame: &mut aviutl2_eframe::eframe::Frame,
     ) {
-        // NOTE: オブジェクトの選択状態が変わったときのコールバックがあれば
-        // そっちを使ったほうが良いはず
-        ui.request_repaint_after(std::time::Duration::from_millis(100));
-
         egui::CentralPanel::default().show(ui, |ui| {
             if crate::EDIT_HANDLE.is_ready() {
                 if self.debug_view {

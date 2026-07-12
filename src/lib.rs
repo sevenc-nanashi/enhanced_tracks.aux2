@@ -320,7 +320,6 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
         project
             .serialize("last_bank_id", &*CURRENT_BANK.lock().unwrap())
             .unwrap();
-        let info = EDIT_HANDLE.get_edit_info();
         let keyframes: Vec<(KeyframeTrackParams, crate::keyframe::Keyframes)> = KEYFRAMES
             .iter()
             .map(|entry| (*entry.key(), entry.value().clone()))
@@ -366,6 +365,10 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
 
     fn event_update_object_info(&mut self) {
         self.watcher.notify_object_change();
+    }
+
+    fn event_change_focus_object(&mut self) {
+        self.watcher.notify_object_selected();
     }
 
     fn event_change_edit_frame(&mut self) {

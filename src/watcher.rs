@@ -18,6 +18,7 @@ static RESOLVED_SEEDINGS: std::sync::LazyLock<
 pub enum WatcherMessage {
     ObjectChanged,
     FlushResolved,
+    ObjectSelected,
     Shutdown,
 }
 
@@ -41,6 +42,11 @@ impl WatcherThread {
                             ctx.request_repaint();
                         }
                     }
+                    WatcherMessage::ObjectSelected => {
+                        if let Some(ctx) = crate::EGUI_CONTEXT.lock().unwrap().as_ref() {
+                            ctx.request_repaint();
+                        }
+                    }
                     WatcherMessage::Shutdown => break,
                 }
             }
@@ -59,6 +65,16 @@ impl WatcherThread {
             );
         }
     }
+
+    pub fn notify_object_selected(&self) {
+        if let Err(e) = self.sender.send(WatcherMessage::ObjectSelected) {
+            tracing::error!(
+                "Failed to send object selected message to watcher thread: {:?}",
+                e
+            );
+        }
+    }
+
     pub fn flush_resolved_migrations(&self) {
         let mut resolved_migrations = RESOLVED_MIGRATIONS.lock().unwrap();
         let mut resolved_seedings = RESOLVED_SEEDINGS.lock().unwrap();
