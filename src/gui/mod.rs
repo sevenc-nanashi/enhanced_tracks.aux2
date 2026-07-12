@@ -15,7 +15,15 @@ pub struct KeyframesGui {
     pub keyframe_timeline_view: KeyframeTimelineView,
     pub debug_counter: usize,
     pub debug_view: bool,
+    edit_info: Option<aviutl2::generic::EditInfo>,
+    read_section_receiver: Option<std::sync::mpsc::Receiver<GuiReadSectionResult>>,
 }
+
+type GuiReadSectionResult = anyhow::Result<(
+    aviutl2::generic::EditInfo,
+    Option<SelectedObjectInfo>,
+    Option<TimeControlEditorTarget>,
+)>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct KeyframeTimelineView {
@@ -305,11 +313,13 @@ pub fn create_gui(
         keyframe_timeline_view: KeyframeTimelineView::default(),
         debug_counter: 0,
         debug_view: false,
+        edit_info: None,
+        read_section_receiver: None,
     }))
 }
 
 impl aviutl2_eframe::eframe::App for KeyframesGui {
-    fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if crate::EDIT_HANDLE.is_ready() {
             if crate::EDIT_HANDLE
                 .get_edit_state()
@@ -318,18 +328,53 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
                 return;
             }
 
-            let update_selected_object_info = crate::EDIT_HANDLE
-                .call_read_section(|read| {
-                    self.update_selected_object_info(read)
-                        .context("Failed to update selected object info")?;
-                    self.update_timecontrol_editor_target(read)
-                        .context("Failed to update timecontrol editor target")?;
-                    anyhow::Ok(())
-                })
-                .map_err(anyhow::Error::from)
-                .flatten();
-            if let Err(e) = update_selected_object_info {
-                tracing::error!("Failed to update selected object info: {:?}", e);
+            if let Some(receiver) = &self.read_section_receiver {
+                match receiver.try_recv() {
+                    Ok(Ok((edit_info, selected_object_info, timecontrol_editor))) => {
+                        self.edit_info = Some(edit_info);
+                        self.selected_object_info = selected_object_info;
+                        if !self
+                            .timecontrol_editor
+                            .as_ref()
+                            .is_some_and(|target| target.dirty)
+                        {
+                            self.timecontrol_editor = timecontrol_editor;
+                        }
+                        self.read_section_receiver = None;
+                    }
+                    Ok(Err(error)) => {
+                        tracing::error!("Failed to update selected object info: {:?}", error);
+                        self.read_section_receiver = None;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        tracing::error!("GUI read section worker disconnected");
+                        self.read_section_receiver = None;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                }
+            }
+
+            if self.read_section_receiver.is_none() {
+                let (sender, receiver) = std::sync::mpsc::channel();
+                let timecontrol_editor = self.timecontrol_editor.clone();
+                let ctx = ctx.clone();
+                std::thread::spawn(move || {
+                    let edit_info = crate::EDIT_HANDLE.get_edit_info();
+                    let result = crate::EDIT_HANDLE
+                        .call_read_section(|read| {
+                            let selected_object_info = Self::read_selected_object_info(read)
+                                .context("Failed to update selected object info")?;
+                            let timecontrol_editor =
+                                Self::read_timecontrol_editor_target(timecontrol_editor, read)
+                                    .context("Failed to update timecontrol editor target")?;
+                            anyhow::Ok((edit_info, selected_object_info, timecontrol_editor))
+                        })
+                        .map_err(anyhow::Error::from)
+                        .flatten();
+                    let _ = sender.send(result);
+                    ctx.request_repaint();
+                });
+                self.read_section_receiver = Some(receiver);
             }
         }
     }
@@ -440,14 +485,12 @@ impl KeyframesGui {
         );
     }
 
-    fn update_selected_object_info(
-        &mut self,
+    fn read_selected_object_info(
         read: &aviutl2::generic::ReadSection,
-    ) -> aviutl2::common::AnyResult<()> {
+    ) -> aviutl2::common::AnyResult<Option<SelectedObjectInfo>> {
         let selected_object = read.get_focused_object()?;
         let Some(selected_object) = selected_object else {
-            self.selected_object_info = None;
-            return Ok(());
+            return Ok(None);
         };
         let first_effect_name = read
             .get_effect_name(
@@ -588,9 +631,7 @@ impl KeyframesGui {
             frames,
             effects,
         };
-        self.selected_object_info = Some(selected_object_info);
-
-        Ok(())
+        Ok(Some(selected_object_info))
     }
 
     fn determine_effect_type(

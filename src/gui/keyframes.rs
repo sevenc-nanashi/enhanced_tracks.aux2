@@ -81,12 +81,13 @@ impl KeyframesGui {
                 self.debug_view = true;
             }
         }
-        ui.push_id(selected_object_info.handle, |ui| {
-            let info = crate::EDIT_HANDLE.get_edit_info();
-            for effect in &selected_object_info.effects {
-                self.render_effect_info(ui, &info, &selected_object_info, effect);
-            }
-        });
+        if let Some(info) = self.edit_info {
+            ui.push_id(selected_object_info.handle, |ui| {
+                for effect in &selected_object_info.effects {
+                    self.render_effect_info(ui, &info, &selected_object_info, effect);
+                }
+            });
+        }
     }
 
     fn render_effect_info(

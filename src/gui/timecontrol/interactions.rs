@@ -1085,47 +1085,45 @@ impl KeyframesGui {
         [x, origin[1] + tangent[1] * scale]
     }
 
-    pub fn update_timecontrol_editor_target(
-        &mut self,
+    pub fn read_timecontrol_editor_target(
+        mut target: Option<TimeControlEditorTarget>,
         read: &aviutl2::generic::ReadSection,
-    ) -> aviutl2::common::AnyResult<()> {
-        let Some(target) = &self.timecontrol_editor else {
-            return Ok(());
+    ) -> aviutl2::common::AnyResult<Option<TimeControlEditorTarget>> {
+        let Some(current_target) = &target else {
+            return Ok(None);
         };
-        if target.dirty {
-            return Ok(());
+        if current_target.dirty {
+            return Ok(target);
         }
         if !read.get_focused_object()?.is_some_and(|focused| {
             read.get_effects(focused)
-                .is_ok_and(|effects| effects.contains(&target.effect))
+                .is_ok_and(|effects| effects.contains(&current_target.effect))
         }) {
             tracing::info!("Time control editor target effect is not focused, closing editor");
-            self.timecontrol_editor = None;
-            return Ok(());
+            return Ok(None);
         }
         let params = match crate::KeyframeTrackParams::parse(
             read,
-            target.effect,
-            &target.track_names[0],
+            current_target.effect,
+            &current_target.track_names[0],
         ) {
             Some(params) => params,
             None => {
                 tracing::error!(
                     "Failed to parse keyframe track params for time control editor, closing editor"
                 );
-                self.timecontrol_editor = None;
-                return Ok(());
+                return Ok(None);
             }
         };
         let keyframes = crate::KEYFRAMES
             .get(&params)
             .context("Failed to get keyframes for time control editor")?
             .clone();
-        self.timecontrol_editor.as_mut().unwrap().timecontrol =
-            match keyframes.keyframes[target.keyframe_index] {
+        target.as_mut().unwrap().timecontrol =
+            match keyframes.keyframes[current_target.keyframe_index] {
                 crate::keyframe::Keyframe::Easing(ref easing) => easing.timecontrol.clone(),
                 _ => anyhow::bail!("Target keyframe is not easing"),
             };
-        Ok(())
+        Ok(target)
     }
 }
