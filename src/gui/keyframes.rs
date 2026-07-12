@@ -419,7 +419,7 @@ impl KeyframesGui {
                     .get(&current_kf_info.easing)
                     .is_some_and(|easing| easing.has_timecontrol)
             {
-                self.open_timecontrol_editor(params, effect, track, i, kf_info);
+                self.open_timecontrol_editor(params, effect, track, section.0, current_kf_info);
                 tracing::info!(
                     "Opening time control dialog by double click for section {} of track {:?} in effect {:?}",
                     section.0,
@@ -934,8 +934,8 @@ impl KeyframesGui {
                 tracing::info!(
                     "Opening time control dialog for section {} of track {:?} in effect {:?}",
                     index,
-                    current_easing.name,
-                    current_level
+                    track.names,
+                    current_easing.name
                 );
             }
             has_anything = true;

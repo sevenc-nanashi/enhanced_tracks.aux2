@@ -23,6 +23,7 @@ type GuiReadSectionResult = anyhow::Result<(
     aviutl2::generic::EditInfo,
     Option<SelectedObjectInfo>,
     Option<TimeControlEditorTarget>,
+    Option<aviutl2::generic::EffectHandle>,
 )>;
 
 #[derive(Debug, Clone, Copy)]
@@ -330,13 +331,21 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
 
             if let Some(receiver) = &self.read_section_receiver {
                 match receiver.try_recv() {
-                    Ok(Ok((edit_info, selected_object_info, timecontrol_editor))) => {
+                    Ok(Ok((
+                        edit_info,
+                        selected_object_info,
+                        timecontrol_editor,
+                        requested_effect,
+                    ))) => {
                         self.edit_info = Some(edit_info);
                         self.selected_object_info = selected_object_info;
-                        if !self
-                            .timecontrol_editor
-                            .as_ref()
-                            .is_some_and(|target| target.dirty)
+                        let current_effect =
+                            self.timecontrol_editor.as_ref().map(|target| target.effect);
+                        if current_effect == requested_effect
+                            && !self
+                                .timecontrol_editor
+                                .as_ref()
+                                .is_some_and(|target| target.dirty)
                         {
                             self.timecontrol_editor = timecontrol_editor;
                         }
@@ -357,6 +366,7 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
             if self.read_section_receiver.is_none() {
                 let (sender, receiver) = std::sync::mpsc::channel();
                 let timecontrol_editor = self.timecontrol_editor.clone();
+                let requested_effect = timecontrol_editor.as_ref().map(|target| target.effect);
                 let ctx = ctx.clone();
                 std::thread::spawn(move || {
                     let edit_info = crate::EDIT_HANDLE.get_edit_info();
@@ -367,7 +377,12 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
                             let timecontrol_editor =
                                 Self::read_timecontrol_editor_target(timecontrol_editor, read)
                                     .context("Failed to update timecontrol editor target")?;
-                            anyhow::Ok((edit_info, selected_object_info, timecontrol_editor))
+                            anyhow::Ok((
+                                edit_info,
+                                selected_object_info,
+                                timecontrol_editor,
+                                requested_effect,
+                            ))
                         })
                         .map_err(anyhow::Error::from)
                         .flatten();
