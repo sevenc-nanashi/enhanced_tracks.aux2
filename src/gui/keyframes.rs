@@ -800,7 +800,6 @@ impl KeyframesGui {
                     current_keyframe,
                     current_easing,
                     index,
-                    current_level,
                     &mut update_keyframe,
                 );
             }
@@ -898,7 +897,6 @@ impl KeyframesGui {
         current_keyframe: &crate::keyframe::EasingKeyframeInfo,
         current_easing: &crate::keyframe::Easing,
         index: usize,
-        current_level: &str,
         update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
     ) {
         let mut has_anything = false;

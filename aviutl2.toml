@@ -51,3 +51,8 @@ catalog_dependencies = [
 package_template = "./release/package.txt"
 package_information = "{name} v{version} / 擬似的にキーフレーム的な動作を実現するためのプラグイン"
 prebuild = ["cargo about generate ./about.hbs -o ./release/package.txt"]
+
+[catalog]
+id = "sevenc-nanashi.enhanced_tracks-aux2"
+download_repo = { owner = "sevenc-nanashi", repo = "enhanced_tracks.aux2" }
+license_path = "./LICENSE"
