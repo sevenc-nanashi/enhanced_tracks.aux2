@@ -321,9 +321,6 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
             .serialize("last_bank_id", &*CURRENT_BANK.lock().unwrap())
             .unwrap();
         let info = EDIT_HANDLE.get_edit_info();
-        let _ = EDIT_HANDLE.call_read_section(|read| {
-            clear_unused_keyframes(&info, read);
-        });
         let keyframes: Vec<(KeyframeTrackParams, crate::keyframe::Keyframes)> = KEYFRAMES
             .iter()
             .map(|entry| (*entry.key(), entry.value().clone()))
