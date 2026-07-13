@@ -1,6 +1,6 @@
 [package]
 name = "enhanced_tracks-aux2"
-version = "0.1.0-preview.27"
+version = "0.1.0-preview.28"
 edition = "2024"
 
 [lib]
