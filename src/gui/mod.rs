@@ -339,7 +339,18 @@ impl aviutl2_eframe::eframe::App for KeyframesGui {
                                 .as_ref()
                                 .is_some_and(|target| target.dirty)
                         {
-                            self.timecontrol_editor = timecontrol_editor;
+                            match (&mut self.timecontrol_editor, timecontrol_editor) {
+                                (Some(current), Some(updated)) => {
+                                    current.timecontrol = updated.timecontrol;
+                                }
+                                (current @ Some(_), None) => {
+                                    *current = None;
+                                }
+                                (None, None) => {}
+                                (None, Some(_)) => {
+                                    unreachable!("The edit section thread must not open an editor");
+                                }
+                            }
                         }
                     }
                     Err(error) => {
