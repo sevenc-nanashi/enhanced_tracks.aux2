@@ -6,3 +6,4 @@ cargo-prebuilt = "https://github.com/sevenc-nanashi/mise-cargo-prebuilt"
 "cargo:aviutl2-cli" = "0.10.1"
 "github:EmbarkStudios/cargo-about" = { version = "latest" }
 "cargo-prebuilt:cargo-edit" = "latest"
+stylua = "latest"

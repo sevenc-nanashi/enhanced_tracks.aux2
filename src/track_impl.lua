@@ -61,10 +61,8 @@ local function create_patched_require(inner_G, o_script_dir)
     if package.loaded[name] then
       local result = package.loaded[name]
       if
-          (type(result) == "table" and
-            result["__enhanced_tracks_patched"]) or (
-            type(result) == "function" and getfenv(result)["__enhanced_tracks_patched"]
-          )
+        (type(result) == "table" and result["__enhanced_tracks_patched"])
+        or (type(result) == "function" and getfenv(result)["__enhanced_tracks_patched"])
       then
         return result
       end
@@ -243,9 +241,8 @@ local function run_script(o_bank_id, o_keyframe_id, o_scene_id, o_project_sessio
     return left + (right - left) * o_ratio
   end
 
-  local o_indices, o_script_name, o_accelerate, o_decelerate, o_params = mod
-      .get_keyframe(
-        o_bank_id, o_keyframe_id, o_scene_id, o_project_session_nonce, o_index)
+  local o_indices, o_script_name, o_accelerate, o_decelerate, o_params =
+    mod.get_keyframe(o_bank_id, o_keyframe_id, o_scene_id, o_project_session_nonce, o_index)
 
   if mod.is_cache_cleared() then
     print("@info", "clearing script cache")
@@ -278,8 +275,15 @@ local function run_script(o_bank_id, o_keyframe_id, o_scene_id, o_project_sessio
   end
 
   ENHANCED_TRACKS_STATE = {
-    o_bank_id, o_keyframe_id, o_scene_id, o_project_session_nonce, o_index, o_indices, o_accelerate, o_decelerate,
-    o_params
+    o_bank_id,
+    o_keyframe_id,
+    o_scene_id,
+    o_project_session_nonce,
+    o_index,
+    o_indices,
+    o_accelerate,
+    o_decelerate,
+    o_params,
   }
 
   if o_inspect then
