@@ -64,7 +64,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.version }}
           body_path: ./release/README.md
-          prerelease: '${{ contains(github.event.inputs.version, "-") }}'
+          prerelease: "${{ contains(github.event.inputs.version, '-') }}"
           files: |
             ./release/catalog.json
             ./release/sevenc-nanashi.enhanced_tracks-aux2-v*.au2pkg.zip
