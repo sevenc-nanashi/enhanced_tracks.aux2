@@ -129,6 +129,7 @@ local function patched_getpoint(...)
   end
   local target, option, option2 = ...
   if type(target) == "number" then
+    target = math.floor(target)
     local remapped_index = indices[target + 1]
     if target < 0 then
       remapped_index = 0
