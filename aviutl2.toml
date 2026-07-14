@@ -49,7 +49,7 @@ catalog_dependencies = [
 
 [release]
 package_template = "./release/package.txt"
-package_information = "{name} v{version} / 擬似的にキーフレーム的な動作を実現するためのプラグイン"
+package_information = "{name} v{version} / 中間点ごとのイージングスクリプト切り替え+自由度の高い時間制御"
 prebuild = ["cargo about generate ./about.hbs -o ./release/package.txt"]
 
 [catalog]
