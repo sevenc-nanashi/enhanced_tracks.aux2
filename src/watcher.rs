@@ -213,26 +213,28 @@ fn find_stale_keyframe_bindings(
                     ..*params
                 };
                 let current_frames = object_keyframe_frames(read, binding.object)?;
+                let keyframes = crate::KEYFRAMES.get(params).map(|keyframes| {
+                    tracing::info!(
+                        "Migrating keyframe track params {:?} for effect {:?} to new scene id {:?}",
+                        params,
+                        effect_key,
+                        new_params.scene_id
+                    );
+                    keyframes.clone()
+                });
                 crate::KEYFRAMES.insert(
                     new_params,
-                    crate::KEYFRAMES
-                        .get(params)
-                        .map(|k| {
-                            tracing::info!(
-                                "Migrating keyframe track params {:?} for effect {:?} to new scene id {:?}",
-                                params,
-                                effect_key,
-                                new_params.scene_id
-                            );
-                            k.clone()
-                        })
+                    keyframes
                         .unwrap_or_else(|| crate::keyframe::Keyframes::new(current_frames.len())),
                 );
                 crate::KEYFRAME_FRAMES.insert(new_params, current_frames);
                 change_bindings.insert(binding.clone(), new_params);
             } else {
                 let current_frames = object_keyframe_frames(read, binding.object)?;
-                match crate::KEYFRAMES.get(params) {
+                match crate::KEYFRAMES
+                    .get(params)
+                    .map(|keyframes| keyframes.clone())
+                {
                     None => {
                         tracing::info!(
                             "Keyframe track params {:?} for effect {:?} is not registered in global keyframes map",
