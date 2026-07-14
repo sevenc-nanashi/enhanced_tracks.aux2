@@ -123,8 +123,25 @@ local function interpolation_value(axes, segment, ratio, framerate)
   return values[1], values[2], values[3]
 end
 
-local segment, ratio = math.modf(obj.getpoint("timecontrol", "index"))
 local point_count = obj.getpoint("num")
+assert(point_count > 0, "trackbar movement requires at least one point")
+
+local position = obj.getpoint("timecontrol", "index")
+local segment
+local ratio
+if point_count == 1 then
+  segment = 0
+  ratio = 0.0
+elseif position < 0.0 then
+  segment = 0
+  ratio = position
+elseif position >= point_count - 1 then
+  segment = point_count - 2
+  ratio = position - segment
+else
+  segment, ratio = math.modf(position)
+end
+
 local framerate = obj.getpoint("framerate")
 assert(framerate ~= nil and framerate > 0.0, "trackbar movement framerate is unavailable")
 local link_index, link_count = obj.getpoint("link")
