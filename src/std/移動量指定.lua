@@ -2,22 +2,16 @@
 --twopoint
 
 local num = obj.getpoint("num")
-local values = {}
-for i = 0, num - 1 do
-  values[i + 1] = obj.getpoint(i)
-end
+assert(num >= 2, "specified-distance movement requires two points")
 
-if #values == 0 then
-  return 0.0
-end
-if #values == 1 then
-  return values[1]
-end
+local start_value = obj.getpoint(0)
+local movement_amount = obj.getpoint(1)
+local segment = math.min(math.floor(obj.getpoint("index")), num - 2)
+local current_time = obj.getpoint("time")
+local segment_time = obj.getpoint("time", segment)
+local framerate = obj.getpoint("framerate")
+assert(current_time ~= nil and segment_time ~= nil, "trackbar movement time information is unavailable")
+assert(framerate ~= nil and framerate > 0.0, "trackbar movement framerate is unavailable")
 
-local t = num <= 1 and 0.0 or math.max(0.0, math.min(1.0, obj.getpoint("index") / (num - 1)))
-local ok, timecontrol_value = pcall(obj.getpoint, "timecontrol", "value")
-if ok and timecontrol_value then
-  t = timecontrol_value
-end
-
-return values[1] + values[2] * t
+local elapsed_frames = (current_time - segment_time) * framerate
+return start_value + movement_amount * elapsed_frames
