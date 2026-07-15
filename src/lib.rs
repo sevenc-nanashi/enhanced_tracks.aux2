@@ -546,6 +546,7 @@ fn load_easings() -> anyhow::Result<()> {
         .and_then(|content| aviutl2::alias::Table::from_str(&content).ok())
         .unwrap_or_default();
 
+    apply_movement_labels(&mut easings, &table);
     easings.sort_by_key(|easing| {
         table
             .get_table(&format!("Movement.{}", easing.name))
@@ -564,6 +565,18 @@ fn load_easings() -> anyhow::Result<()> {
     *EASINGS.write().unwrap() = index_map;
 
     Ok(())
+}
+
+fn apply_movement_labels(easings: &mut [crate::keyframe::Easing], table: &aviutl2::alias::Table) {
+    for easing in easings {
+        let Some(label) = table
+            .get_table(&format!("Movement.{}", easing.name))
+            .and_then(|movement| movement.get_value("label"))
+        else {
+            continue;
+        };
+        easing.label = Some(label.clone());
+    }
 }
 
 fn collect_used_keyframes(
@@ -587,3 +600,33 @@ fn collect_used_keyframes(
 }
 
 aviutl2::register_generic_plugin!(KeyframesAux2);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn movement_label_overrides_script_label() {
+        let mut easing =
+            crate::keyframe::Easing::from_script(None, "test-easing", "--label:Script\\Label");
+        let mut movement = aviutl2::alias::Table::new();
+        movement.insert_value("label", "Ini\\Label");
+        let mut table = aviutl2::alias::Table::new();
+        table.insert_table("Movement.test-easing", movement);
+
+        apply_movement_labels(std::slice::from_mut(&mut easing), &table);
+
+        assert_eq!(easing.label.as_deref(), Some("Ini\\Label"));
+    }
+
+    #[test]
+    fn script_label_is_kept_without_movement_label() {
+        let mut easing =
+            crate::keyframe::Easing::from_script(None, "test-easing", "--label:Script\\Label");
+        let table = aviutl2::alias::Table::new();
+
+        apply_movement_labels(std::slice::from_mut(&mut easing), &table);
+
+        assert_eq!(easing.label.as_deref(), Some("Script\\Label"));
+    }
+}

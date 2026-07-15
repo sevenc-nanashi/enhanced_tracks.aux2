@@ -11,6 +11,14 @@ struct EasingSearchItem<'a> {
     text: String,
 }
 
+enum EasingChoiceNode<'a> {
+    Easing(&'a crate::keyframe::Easing),
+    Label {
+        label: String,
+        children: Vec<EasingChoiceNode<'a>>,
+    },
+}
+
 impl AsRef<str> for EasingSearchItem<'_> {
     fn as_ref(&self) -> &str {
         &self.text
@@ -857,7 +865,6 @@ impl KeyframesGui {
                 }
             });
             ui.separator();
-            // TODO: ちゃんとlabelごとに階層にする
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
                 Self::show_easing_choices(
                     ui,
@@ -1128,9 +1135,8 @@ impl KeyframesGui {
     ) {
         let search_text = search_text.trim();
         if search_text.is_empty() {
-            for easing in easings.values() {
-                Self::show_easing_choice(ui, keyframes, index, easing, update_keyframe);
-            }
+            let choices = Self::build_easing_choice_tree(easings.values());
+            Self::show_easing_choice_nodes(ui, keyframes, index, &choices, update_keyframe);
             return;
         }
 
@@ -1153,6 +1159,81 @@ impl KeyframesGui {
         }
         for (item, _) in matches.into_iter().take(100) {
             Self::show_easing_choice(ui, keyframes, index, item.easing, update_keyframe);
+        }
+    }
+
+    fn build_easing_choice_tree<'a>(
+        easings: impl IntoIterator<Item = &'a crate::keyframe::Easing>,
+    ) -> Vec<EasingChoiceNode<'a>> {
+        let mut root = Vec::new();
+        for easing in easings {
+            let Some(label) = &easing.label else {
+                root.push(EasingChoiceNode::Easing(easing));
+                continue;
+            };
+            if label.is_empty() {
+                root.push(EasingChoiceNode::Easing(easing));
+                continue;
+            }
+            let label = aviutl2::config::get_language_text("Effect", &label);
+
+            let mut children = &mut root;
+            for segment in label.split('\\') {
+                let existing_index = children.iter().position(|node| {
+                    matches!(
+                        node,
+                        EasingChoiceNode::Label { label, .. } if label == segment
+                    )
+                });
+                let label_index = if let Some(index) = existing_index {
+                    index
+                } else {
+                    children.push(EasingChoiceNode::Label {
+                        label: segment.to_string(),
+                        children: Vec::new(),
+                    });
+                    children.len() - 1
+                };
+                let EasingChoiceNode::Label {
+                    children: label_children,
+                    ..
+                } = &mut children[label_index]
+                else {
+                    unreachable!();
+                };
+                children = label_children;
+            }
+            children.push(EasingChoiceNode::Easing(easing));
+        }
+        root
+    }
+
+    fn show_easing_choice_nodes(
+        ui: &mut egui::Ui,
+        keyframes: &crate::keyframe::Keyframes,
+        index: usize,
+        nodes: &[EasingChoiceNode<'_>],
+        update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
+    ) {
+        for node in nodes {
+            match node {
+                EasingChoiceNode::Easing(easing) => {
+                    Self::show_easing_choice(ui, keyframes, index, easing, update_keyframe);
+                }
+                EasingChoiceNode::Label { label, children } => {
+                    ui.menu_button(label.as_str(), |ui| {
+                        egui::containers::ScrollArea::vertical().show(ui, |ui| {
+                            Self::show_easing_choice_nodes(
+                                ui,
+                                keyframes,
+                                index,
+                                children,
+                                update_keyframe,
+                            );
+                        });
+                    });
+                }
+            }
         }
     }
 
