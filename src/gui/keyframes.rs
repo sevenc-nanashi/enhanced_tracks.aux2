@@ -106,11 +106,23 @@ impl KeyframesGui {
         effect: &EffectInfo,
     ) {
         egui::containers::CollapsingHeader::new(if effect.is_output {
-            format!(
-                "{} [{}]",
-                aviutl2::config::get_language_text("Effect", "描画"),
-                crate::utils::get_translated_effect_name(&effect.name)
-            )
+            match effect.effect_type {
+                EffectType::VideoInput | EffectType::VideoEffect | EffectType::VideoFilter => {
+                    format!(
+                        "{} [{}]",
+                        aviutl2::config::get_language_text("Effect", "描画"),
+                        crate::utils::get_translated_effect_name(&effect.name)
+                    )
+                }
+                EffectType::AudioInput | EffectType::AudioEffect | EffectType::AudioFilter => {
+                    format!(
+                        "{} [{}]",
+                        aviutl2::config::get_language_text("Effect", "音声"),
+                        crate::utils::get_translated_effect_name(&effect.name)
+                    )
+                }
+                _ => crate::utils::get_translated_effect_name(&effect.name),
+            }
         } else {
             crate::utils::get_translated_effect_name(&effect.name)
         })

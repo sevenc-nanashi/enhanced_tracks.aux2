@@ -506,7 +506,10 @@ impl KeyframesGui {
             let mut effect_info = EffectInfo {
                 handle: effect.handle,
                 name: effect_name.to_string(),
-                is_output: matches!(effect_info.effect_type, aviutl2::generic::EffectType::Output),
+                is_output: matches!(
+                    effect_info.effect_type,
+                    aviutl2::generic::EffectType::Output
+                ),
                 effect_type,
                 keyframe_tracks: indexmap::IndexMap::new(),
             };
@@ -640,8 +643,8 @@ impl KeyframesGui {
             }
             aviutl2::generic::EffectType::Filter => EffectType::VideoEffect,
 
-            aviutl2::generic::EffectType::Input if effect_info.flag.audio => EffectType::AudioInput,
-            aviutl2::generic::EffectType::Input => EffectType::VideoInput,
+            aviutl2::generic::EffectType::Input if effect_info.flag.video => EffectType::VideoInput,
+            aviutl2::generic::EffectType::Input => EffectType::AudioInput,
             aviutl2::generic::EffectType::SceneChange => EffectType::Control,
             aviutl2::generic::EffectType::Control => EffectType::Control,
             aviutl2::generic::EffectType::Output => {
