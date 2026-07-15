@@ -817,7 +817,7 @@ dependencies = [
 
 [[package]]
 name = "enhanced_tracks-aux2"
-version = "0.1.0-preview.31"
+version = "0.1.0-preview.32"
 dependencies = [
  "anyhow",
  "aviutl2",
