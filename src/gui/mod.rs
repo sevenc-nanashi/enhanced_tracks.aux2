@@ -190,6 +190,7 @@ pub struct EffectInfo {
     pub handle: aviutl2::generic::EffectHandle,
     pub name: String,
     pub effect_type: EffectType,
+    pub is_output: bool,
     pub keyframe_tracks: indexmap::IndexMap<String, KeyframeTrackInfo>,
 }
 
@@ -505,6 +506,7 @@ impl KeyframesGui {
             let mut effect_info = EffectInfo {
                 handle: effect.handle,
                 name: effect_name.to_string(),
+                is_output: matches!(effect_info.effect_type, aviutl2::generic::EffectType::Output),
                 effect_type,
                 keyframe_tracks: indexmap::IndexMap::new(),
             };

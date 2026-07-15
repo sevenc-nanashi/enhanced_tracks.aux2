@@ -97,9 +97,15 @@ impl KeyframesGui {
         object: &SelectedObjectInfo,
         effect: &EffectInfo,
     ) {
-        egui::containers::CollapsingHeader::new(crate::utils::get_translated_effect_name(
-            &effect.name,
-        ))
+        egui::containers::CollapsingHeader::new(if effect.is_output {
+            format!(
+                "{} [{}]",
+                aviutl2::config::get_language_text("Effect", "描画"),
+                crate::utils::get_translated_effect_name(&effect.name)
+            )
+        } else {
+            crate::utils::get_translated_effect_name(&effect.name)
+        })
         .id_salt(effect.handle)
         .enabled(!effect.keyframe_tracks.is_empty())
         .open(effect.keyframe_tracks.is_empty().then_some(false))
@@ -495,16 +501,35 @@ impl KeyframesGui {
 
     fn easing_hover_text(kf_info: &crate::keyframe::EasingKeyframeInfo) -> String {
         if kf_info.params.is_empty() {
-            return kf_info.easing.clone();
+            return crate::utils::get_translated_effect_name(&kf_info.easing);
         }
 
+        // TODO: ここもi18nするべき？
         format!(
-            "{}：{}",
-            kf_info.easing,
+            "{}: {}",
+            crate::utils::get_translated_effect_name(&kf_info.easing),
             kf_info
                 .params
                 .iter()
-                .map(|p| p.to_string())
+                .zip(
+                    crate::EASINGS
+                        .read()
+                        .unwrap()
+                        .get(&kf_info.easing)
+                        .map_or_else(
+                            || vec!["?".to_string(); kf_info.params.len()],
+                            |easing| easing
+                                .params
+                                .keys()
+                                .map(|k| crate::utils::get_translated_effect_param_name(
+                                    &kf_info.easing,
+                                    k
+                                ))
+                                .collect::<Vec<_>>()
+                        )
+                        .into_iter()
+                )
+                .map(|(param, name)| format!("{}={}", name, param))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -978,7 +1003,7 @@ impl KeyframesGui {
                     &current_easing.name,
                     param_name,
                 );
-                ui.label(format!("{param_name}："));
+                ui.label(format!("{param_name}: "));
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut value)
                         .desired_width(80.0)
