@@ -6,13 +6,14 @@ impl KeyframesGui {
         let row_height = 58.0;
         let available_width = ui.available_width();
         let spacing = 8.0;
-        let target_width = 200.0;
-        let columns = (((available_width + spacing) / (target_width + spacing))
+        const TARGET_WIDTH: f32 = 160.0;
+        const NAME_WIDTH: f32 = 80.0;
+        let columns = (((available_width + spacing) / (TARGET_WIDTH + spacing))
             .floor()
             .max(1.0)) as usize;
         let preset_width = ((available_width - spacing * ((columns - 1) as f32))
             / (columns as f32))
-            .max(target_width);
+            .max(TARGET_WIDTH);
         let presets = crate::keyframe::timecontrol_presets();
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
@@ -42,7 +43,7 @@ impl KeyframesGui {
                                 let text_rect = egui::Rect::from_min_max(
                                     rect.left_top() + egui::vec2(6.0, 4.0),
                                     egui::pos2(
-                                        rect.left() + target_width / 3.0,
+                                        rect.left() + NAME_WIDTH,
                                         rect.bottom() - 4.0,
                                     ),
                                 );
