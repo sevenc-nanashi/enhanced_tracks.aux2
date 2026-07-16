@@ -63,7 +63,12 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.version }}
-          body_path: ./release/README.md
+          body: |
+            > [!WARNING]
+            > このプラグインは性質上、不安定な動作をする可能性があります。
+            > アップデート通知のできる[AviUtl2カタログ](https://github.com/neosku/aviutl2-catalog)を利用することを強く推奨します。
+
+            `sevenc-nanashi.enhanced_tracks-aux2-v${{ github.event.inputs.version }}.au2pkg.zip`をダウンロードし、AviUtl2のプレビュー画面にそのままドラッグ&ドロップしてください。
           prerelease: "${{ contains(github.event.inputs.version, '-') }}"
           files: |
             ./release/catalog.json
