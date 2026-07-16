@@ -3,7 +3,7 @@
 初期化中...=Initializing...
 一時停止中=Paused
 Undoを妨げないために同期を中断しています。クリックで再同期します。=Synchronization is paused to avoid blocking Undo. Click to resync.
-分離=Detach
+分離=Disable Grouping
 移動方法=Movement
 検索=Search
 検索をクリア=Clear search

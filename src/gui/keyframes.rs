@@ -1307,9 +1307,13 @@ impl KeyframesGui {
 
     fn easing_search_text(easing: &crate::keyframe::Easing) -> String {
         if let Some(label) = &easing.label {
-            format!("{} {label}", easing.name)
+            format!(
+                "{} {}",
+                crate::utils::get_translated_effect_name(&easing.name),
+                aviutl2::config::get_language_text("Effect", label)
+            )
         } else {
-            easing.name.clone()
+            crate::utils::get_translated_effect_name(&easing.name)
         }
     }
 
