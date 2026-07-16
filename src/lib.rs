@@ -27,6 +27,7 @@ pub struct CurrentSceneUsageInfo {
 
 pub static EFFECTS: std::sync::LazyLock<dashmap::DashMap<String, aviutl2::generic::Effect>> =
     std::sync::LazyLock::new(dashmap::DashMap::new);
+/// NOTE: ここに存在しないイージングが設定されることもありうる！（スクリプトを抜くとそうなる）
 pub static EASINGS: std::sync::LazyLock<
     std::sync::RwLock<indexmap::IndexMap<String, crate::keyframe::Easing>>,
 > = std::sync::LazyLock::new(|| std::sync::RwLock::new(indexmap::IndexMap::new()));

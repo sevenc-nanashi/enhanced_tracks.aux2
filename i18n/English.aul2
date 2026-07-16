@@ -30,3 +30,4 @@ Bounce=Bounce
 ハンドルリセット=Reset Handles
 クリックで中間点と継続を切り替え=Click to toggle between Midpoint and Continue
 この移動方法では中間点の切り替えはできません。=Midpoint is not available in this movement mode.
+（不明な移動方法）= (Unknown Movement)

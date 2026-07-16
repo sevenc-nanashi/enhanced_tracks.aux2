@@ -520,6 +520,14 @@ impl KeyframesGui {
     }
 
     fn easing_hover_text(kf_info: &crate::keyframe::EasingKeyframeInfo) -> String {
+        let easings = crate::EASINGS.read().unwrap();
+        if easings.get(&kf_info.easing).is_none() {
+            return format!(
+                "{}{}",
+                crate::utils::get_translated_effect_name(&kf_info.easing),
+                aviutl2::config::translate("（不明な移動方法）")
+            );
+        }
         if kf_info.params.is_empty() {
             return crate::utils::get_translated_effect_name(&kf_info.easing);
         }
@@ -604,18 +612,23 @@ impl KeyframesGui {
         keyframes: &crate::keyframe::Keyframes,
         total_frames: usize,
     ) {
+        let easings = crate::EASINGS.read().unwrap();
+        let mut last_easing_info = match keyframes.keyframes.first() {
+            Some(crate::keyframe::Keyframe::Easing(easing)) => easing,
+            _ => return,
+        };
         for (i, frame) in object.frames.iter().enumerate() {
+            last_easing_info = match keyframes.keyframes[i] {
+                crate::keyframe::Keyframe::Easing(ref easing) => easing,
+                _ => last_easing_info,
+            };
             if i == object.frames.len() - 1 {
                 continue;
             }
-            let easing = match keyframes.keyframes[i] {
+            let last_easing = easings.get(&last_easing_info.easing);
+            let easing_label = match keyframes.keyframes[i] {
                 crate::keyframe::Keyframe::Easing(ref easing) => {
-                    if crate::EASINGS
-                        .read()
-                        .unwrap()
-                        .get(&easing.easing)
-                        .is_some_and(|e| e.has_timecontrol)
-                    {
+                    if last_easing.is_some_and(|easing| easing.has_timecontrol) {
                         format!(
                             "🕒 {}",
                             crate::utils::get_translated_effect_name(&easing.easing)
@@ -640,11 +653,15 @@ impl KeyframesGui {
 
             let mut layout = egui::text::LayoutJob::default();
             layout.append(
-                &easing,
+                &easing_label,
                 0.0,
                 egui::TextFormat {
                     font_id: egui::FontId::default(),
-                    color: GUI_COLORS.text,
+                    color: if last_easing.is_some() {
+                        GUI_COLORS.text
+                    } else {
+                        GUI_COLORS.log_warn
+                    },
                     ..Default::default()
                 },
             );
