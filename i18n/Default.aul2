@@ -1,0 +1,6 @@
+; NOTE: トラックバースクリプトにTipsを設定してもなにも起きないけど、一応...
+[Language]
+Information=enhanced_tracks.aux2 (Japanese, Tips) - https://github.com/sevenc-nanashi/enhanced_tracks.aux2
+
+[Tips.enhanced_tracks.aux2]
+effect.name=複雑な移動経路を使用できるようにします。\n「表示」から「enhanced_tracks.aux2」をクリックすることでエディタを開くことが出来ます。\n\n注意：パラメータを直接編集しないでください！

@@ -1,3 +1,6 @@
+[Language]
+Information=enhanced_tracks.aux2 (English) - https://github.com/sevenc-nanashi/enhanced_tracks.aux2
+
 [enhanced_tracks.aux2]
 オブジェクトが選択されていません。=No object selected.
 初期化中...=Initializing...
@@ -15,7 +18,6 @@ Undoを妨げないために同期を中断しています。クリックで再�
 減速=Decelerate
 見つかりませんでした=No results found
 戻る=Back
-プリセット=Presets
 コピー=Copy
 貼り付け=Paste
 中継点追加=Add Point
@@ -31,3 +33,7 @@ Bounce=Bounce
 クリックで中間点と継続を切り替え=Click to toggle between Midpoint and Continue
 この移動方法では中間点の切り替えはできません。=Midpoint is not available in this movement mode.
 （不明な移動方法）= (Unknown Movement)
+閉じる=Close
+
+[Tips.enhanced_tracks.aux2]
+effect.name=Allows using complex movement paths.\nUse "enhanced_tracks.aux2" under "View" to access the editor.\n\nNOTE: DO NOT EDIT THE PARAMETERS DIRECTLY.

@@ -30,9 +30,13 @@ build = ["aulua build", "cargo build"]
 source = "target/release/enhanced_tracks_aux2.dll"
 build = ["aulua build", "cargo build --release"]
 
-[artifacts.enhanced_tracks_aux2-aul2]
+[artifacts.enhanced_tracks_aux2-english-aul2]
 destination = "Language/English.enhanced_tracks-aux2.aul2"
 source = "i18n/English.aul2"
+
+[artifacts.enhanced_tracks_aux2-default-aul2]
+destination = "Language/Default.enhanced_tracks-aux2.aul2"
+source = "i18n/Default.aul2"
 
 [development]
 aviutl2_version = "latest"
