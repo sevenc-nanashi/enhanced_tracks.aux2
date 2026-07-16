@@ -1105,6 +1105,31 @@ pub struct Easing {
     pub ignore_midpoints: bool,
     pub params: indexmap::IndexMap<String, f64>,
 }
+impl Default for Easing {
+    fn default() -> Self {
+        let fallback = include_str!("./fallback.lua");
+        Easing {
+            name: String::new(),
+            script: fallback.to_string(),
+            script_bytes: fallback.as_bytes().to_vec(),
+            label: None,
+            path: None,
+            has_speed: false,
+            default_acceleration: false,
+            default_deceleration: false,
+            has_timecontrol: false,
+            ignore_midpoints: false,
+            params: indexmap::IndexMap::new(),
+        }
+    }
+}
+impl Default for &Easing {
+    fn default() -> Self {
+        static DEFAULT: std::sync::LazyLock<Easing> =
+            std::sync::LazyLock::new(|| Easing::default());
+        std::ops::Deref::deref(&DEFAULT)
+    }
+}
 
 impl Easing {
     pub fn from_script(path: Option<std::path::PathBuf>, name: &str, script: &str) -> Easing {

@@ -672,7 +672,16 @@ impl KeyframesGui {
         keyframes: &crate::keyframe::Keyframes,
         total_frames: usize,
     ) {
+        let mut first_easing = match keyframes.keyframes.first() {
+            Some(crate::keyframe::Keyframe::Easing(easing)) => easing,
+            _ => return,
+        };
         for (i, frame) in object.frames.iter().enumerate() {
+            first_easing = match keyframes.keyframes[i] {
+                crate::keyframe::Keyframe::Easing(ref easing) => easing,
+                _ => first_easing,
+            };
+
             if i == 0 || i == object.frames.len() - 1 {
                 continue;
             }
@@ -688,27 +697,43 @@ impl KeyframesGui {
             let mut click_rect = rect;
             click_rect.set_left(click_rect.left() - SECTION_SEPARATOR_HITBOX_WEIGHT / 2.0);
             click_rect.set_right(click_rect.right() + SECTION_SEPARATOR_HITBOX_WEIGHT / 2.0);
-            let click = ui.interact(
-                click_rect,
-                ui.id().with("separator").with(i),
-                aviutl2_eframe::egui::Sense::click(),
-            );
-            if click.hovered() {
-                painter.rect_filled(click_rect, 0.0, get_colors(&effect.effect_type).1);
+            if crate::EASINGS
+                .read()
+                .unwrap()
+                .get(&first_easing.easing)
+                .is_some_and(|easing| easing.ignore_midpoints)
+            {
+                let click = ui.interact(
+                    click_rect,
+                    ui.id().with("separator").with(i),
+                    aviutl2_eframe::egui::Sense::click(),
+                );
+                click.on_hover_text(aviutl2::config::translate(
+                    "この移動方法では中間点の切り替えはできません。",
+                ));
+            } else {
+                let click = ui.interact(
+                    click_rect,
+                    ui.id().with("separator").with(i),
+                    aviutl2_eframe::egui::Sense::click(),
+                );
+                if click.hovered() {
+                    painter.rect_filled(click_rect, 0.0, get_colors(&effect.effect_type).1);
+                }
+                if click.clicked() {
+                    let mut new_keyframes = keyframes.clone();
+                    new_keyframes.keyframes[i] =
+                        if matches!(keyframes.keyframes[i], crate::keyframe::Keyframe::Ignored) {
+                            crate::keyframe::Keyframe::Midpoint
+                        } else {
+                            crate::keyframe::Keyframe::Ignored
+                        };
+                    Self::update_track_keyframes(effect, track, i, new_keyframes);
+                }
+                click.on_hover_text(aviutl2::config::translate(
+                    "クリックで中間点と継続を切り替え",
+                ));
             }
-            if click.clicked() {
-                let mut new_keyframes = keyframes.clone();
-                new_keyframes.keyframes[i] =
-                    if matches!(keyframes.keyframes[i], crate::keyframe::Keyframe::Ignored) {
-                        crate::keyframe::Keyframe::Midpoint
-                    } else {
-                        crate::keyframe::Keyframe::Ignored
-                    };
-                Self::update_track_keyframes(effect, track, i, new_keyframes);
-            }
-            click.on_hover_text(aviutl2::config::translate(
-                "クリックで中間点と継続を切り替え",
-            ));
 
             let color = if matches!(keyframes.keyframes[i], crate::keyframe::Keyframe::Ignored) {
                 GUI_COLORS.object_section_ignored
@@ -900,9 +925,23 @@ impl KeyframesGui {
         if !current_level.is_empty() || index == 0 {
             return;
         }
+        let crate::keyframe::Keyframe::Easing(last_easing) = keyframes
+            .keyframes
+            .iter()
+            .take(index + 1)
+            .rfind(|k| matches!(k, crate::keyframe::Keyframe::Easing(_)))
+            .expect(
+                "少なくとも0フレーム目にはイージングが設定されているはずなので、必ず見つかるはず",
+            )
+        else {
+            unreachable!()
+        };
+        let easings = crate::EASINGS.read().unwrap();
+        let easing_info = easings.get(&last_easing.easing).unwrap_or_default();
 
         if ui
-            .add(
+            .add_enabled(
+                !easing_info.ignore_midpoints,
                 egui::Button::new(aviutl2::config::translate("中間点")).selected(matches!(
                     keyframes.keyframes[index],
                     crate::keyframe::Keyframe::Midpoint
