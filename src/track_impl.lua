@@ -211,7 +211,7 @@ local function patched_getpoint(...)
 
     if remapped_time < left_time then
       local second_section_time = obj_getpoint("time", indices[2])
-      return -1 + (remapped_time - left_time) / (second_section_time - left_time)
+      return (remapped_time - left_time) / (second_section_time - left_time)
     end
     local ileft_time = left_time
     for i = 1, indices_count - 1 do
