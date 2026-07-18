@@ -33,22 +33,40 @@ impl KeyframesGui {
         let Some(mut target) = self.timecontrol_editor.clone() else {
             return;
         };
-        let easing_name = match crate::KEYFRAMES.get(&target.params).and_then(|keyframes| {
-            match keyframes.keyframes.get(target.keyframe_index) {
-                Some(crate::keyframe::Keyframe::Easing(kf_info)) => Some(kf_info.easing.clone()),
-                _ => None,
+        let easing_name = if target.params.is_initialized() {
+            match crate::KEYFRAMES.get(&target.params).and_then(|keyframes| {
+                match keyframes.keyframes.get(target.keyframe_index) {
+                    Some(crate::keyframe::Keyframe::Easing(kf_info)) => {
+                        Some(kf_info.easing.clone())
+                    }
+                    _ => None,
+                }
+            }) {
+                Some(easing_name) => easing_name,
+                None => {
+                    tracing::error!(
+                        "Failed to get easing name for time control keyframe {:?} of track {:?} in effect {:?}",
+                        target.keyframe_index,
+                        target.track_names,
+                        target.effect_name,
+                    );
+                    self.timecontrol_editor = None;
+                    return;
+                }
             }
-        }) {
-            Some(easing_name) => easing_name,
-            None => {
-                self.timecontrol_editor = None;
-                return;
-            }
+        } else {
+            crate::keyframe::default_easing()
         };
 
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             if ui.button(aviutl2::config::translate("戻る")).clicked() {
+                tracing::info!(
+                    "Closing time control editor for effect {:?}, tracks {:?}, keyframe index {:?}",
+                    target.effect_name,
+                    target.track_names,
+                    target.keyframe_index
+                );
                 self.timecontrol_editor = None;
             }
             ui.label(format!(
@@ -161,20 +179,75 @@ impl KeyframesGui {
         target.dirty |= changed;
 
         if commit_requested && target.dirty {
-            let Some(mut new_keyframes) = crate::KEYFRAMES
-                .get(&target.params)
-                .map(|keyframes| keyframes.clone())
-            else {
-                self.timecontrol_editor = None;
-                return;
+            let new_keyframes = if target.params.is_initialized() {
+                let Some(mut new_keyframes) = crate::KEYFRAMES
+                    .get(&target.params)
+                    .map(|keyframes| keyframes.clone())
+                else {
+                    tracing::error!(
+                        "Failed to get keyframes for time control keyframe {:?} of track {:?} in effect {:?}",
+                        target.keyframe_index,
+                        target.track_names,
+                        target.effect_name,
+                    );
+                    self.timecontrol_editor = None;
+                    return;
+                };
+                let Some(crate::keyframe::Keyframe::Easing(kf_info)) =
+                    new_keyframes.keyframes.get_mut(target.keyframe_index)
+                else {
+                    tracing::error!(
+                        "Failed to get keyframe info for time control keyframe {:?} of track {:?} in effect {:?}",
+                        target.keyframe_index,
+                        target.track_names,
+                        target.effect_name,
+                    );
+                    self.timecontrol_editor = None;
+                    return;
+                };
+                kf_info.timecontrol = target.timecontrol.clone();
+                new_keyframes
+            } else {
+                let num_frames = match crate::EDIT_HANDLE
+                    .call_read_section(|read| read.object(target.object).get_section_num())
+                {
+                    Ok(Ok(num_sections)) => num_sections + 1,
+                    Ok(Err(e)) => {
+                        tracing::error!(
+                            "Failed to get number of sections for object {:?}: {:?}",
+                            target.object,
+                            e
+                        );
+                        self.timecontrol_editor = None;
+                        return;
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "Failed to call read section to get number of sections for object {:?}: {:?}",
+                            target.object,
+                            e
+                        );
+                        self.timecontrol_editor = None;
+                        return;
+                    }
+                };
+
+                let mut new_keyframes = crate::keyframe::Keyframes::new(num_frames);
+                let Some(crate::keyframe::Keyframe::Easing(kf_info)) =
+                    new_keyframes.keyframes.get_mut(target.keyframe_index)
+                else {
+                    tracing::error!(
+                        "Failed to get keyframe info for time control keyframe {:?} of track {:?} in effect {:?}",
+                        target.keyframe_index,
+                        target.track_names,
+                        target.effect_name,
+                    );
+                    self.timecontrol_editor = None;
+                    return;
+                };
+                kf_info.timecontrol = target.timecontrol.clone();
+                new_keyframes
             };
-            let Some(crate::keyframe::Keyframe::Easing(kf_info)) =
-                new_keyframes.keyframes.get_mut(target.keyframe_index)
-            else {
-                self.timecontrol_editor = None;
-                return;
-            };
-            kf_info.timecontrol = target.timecontrol.clone();
             if let Some(new_params) = Self::update_track_keyframes_by_target(&target, new_keyframes)
             {
                 target.params = new_params;

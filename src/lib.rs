@@ -96,6 +96,16 @@ impl KeyframeTrackParams {
         self.bank_id != 0
     }
 }
+impl Default for KeyframeTrackParams {
+    fn default() -> Self {
+        Self {
+            bank_id: 0,
+            keyframes_id: 0,
+            scene_id: -1,
+            project_session_nonce: 0,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct KeyframeBinding {

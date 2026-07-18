@@ -1115,6 +1115,10 @@ impl KeyframesGui {
                 return Ok(None);
             }
         };
+        if !params.is_initialized() {
+            target.as_mut().unwrap().timecontrol = crate::keyframe::TimeControl::default();
+            return Ok(target);
+        }
         let keyframes = crate::KEYFRAMES
             .get(&params)
             .context("Failed to get keyframes for time control editor")?

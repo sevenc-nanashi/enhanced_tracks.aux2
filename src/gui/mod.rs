@@ -77,6 +77,7 @@ impl KeyframeTimelineView {
 pub struct TimeControlEditorTarget {
     pub params: crate::KeyframeTrackParams,
     pub keyframe_index: usize,
+    pub object: aviutl2::generic::ObjectHandle,
     pub effect: aviutl2::generic::EffectHandle,
     pub effect_name: String,
     pub track_names: Vec<String>,

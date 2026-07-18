@@ -5,8 +5,6 @@ impl KeyframesGui {
             .open(&mut self.debug_view)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
-                    ui.label("Debug View");
-                    ui.separator();
                     if ui.button("Print Keyframes").clicked() {
                         tracing::info!("Keyframes: {:#?}", crate::KEYFRAMES);
                     }
