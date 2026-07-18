@@ -825,7 +825,7 @@ impl KeyframesGui {
 
         let visible_y_range = viewport.max_y - viewport.min_y;
         let scroll_y = overflow as f64 / viewport.rect.height() as f64 * visible_y_range;
-        let max_scroll_y = visible_y_range * 0.1;
+        let max_scroll_y = visible_y_range * 0.025;
         let scroll_y = scroll_y.clamp(-max_scroll_y, max_scroll_y);
         *visible_y_bounds = Some(
             TimeControlVerticalBounds {
