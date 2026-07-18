@@ -143,13 +143,21 @@ pub struct EasingKeyframeInfo {
 impl Default for EasingKeyframeInfo {
     fn default() -> Self {
         Self {
-            easing: "直線移動".to_string(),
+            easing: default_easing(),
             acceleration: false,
             deceleration: false,
             params: Vec::new(),
             timecontrol: TimeControl::default(),
         }
     }
+}
+
+pub fn default_easing() -> String {
+    let easings = crate::EASINGS.read().unwrap();
+    easings
+        .get("区間ごとに時間制御@Basic_S")
+        .map_or("直線移動(時間制御)", |_| "区間ごとに時間制御@Basic_S")
+        .to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

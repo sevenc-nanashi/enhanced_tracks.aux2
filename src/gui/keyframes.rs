@@ -201,6 +201,7 @@ impl KeyframesGui {
             &painter,
             response.rect,
             self.keyframe_timeline_view,
+            object,
             effect,
             params,
             track,
@@ -389,6 +390,7 @@ impl KeyframesGui {
         painter: &egui::Painter,
         track_rect: egui::Rect,
         view: KeyframeTimelineView,
+        object: &SelectedObjectInfo,
         effect: &EffectInfo,
         params: &crate::KeyframeTrackParams,
         track: &KeyframeTrackInfo,
@@ -445,7 +447,7 @@ impl KeyframesGui {
                     .get(&current_kf_info.easing)
                     .is_some_and(|easing| easing.has_timecontrol)
             {
-                self.open_timecontrol_editor(params, effect, track, section.0, current_kf_info);
+                self.open_timecontrol_editor(params, object, effect, track, section.0, current_kf_info);
                 tracing::info!(
                     "Opening time control dialog by double click for section {} of track {:?} in effect {:?}",
                     section.0,
@@ -461,6 +463,7 @@ impl KeyframesGui {
                         ui,
                         keyframes,
                         params,
+                        object,
                         effect,
                         track,
                         section.0,
@@ -476,6 +479,7 @@ impl KeyframesGui {
     fn open_timecontrol_editor(
         &mut self,
         params: &crate::KeyframeTrackParams,
+        object: &SelectedObjectInfo,
         effect: &EffectInfo,
         track: &KeyframeTrackInfo,
         keyframe_index: usize,
@@ -484,6 +488,7 @@ impl KeyframesGui {
         self.timecontrol_editor = Some(TimeControlEditorTarget {
             params: *params,
             keyframe_index,
+            object: object.handle,
             effect: effect.handle,
             effect_name: effect.name.clone(),
             track_names: track.names.clone(),
@@ -843,6 +848,7 @@ impl KeyframesGui {
         ui: &mut egui::Ui,
         keyframes: &crate::keyframe::Keyframes,
         params: &crate::KeyframeTrackParams,
+        object: &SelectedObjectInfo,
         effect: &EffectInfo,
         track: &KeyframeTrackInfo,
         index: usize,
@@ -881,6 +887,7 @@ impl KeyframesGui {
                     ui,
                     keyframes,
                     params,
+                    object,
                     effect,
                     track,
                     keyframe_index,
@@ -991,6 +998,7 @@ impl KeyframesGui {
         ui: &mut egui::Ui,
         keyframes: &crate::keyframe::Keyframes,
         params: &crate::KeyframeTrackParams,
+        object: &SelectedObjectInfo,
         effect: &EffectInfo,
         track: &KeyframeTrackInfo,
         keyframe_index: usize,
@@ -1023,6 +1031,7 @@ impl KeyframesGui {
             if ui.button(aviutl2::config::translate("時間制御")).clicked() {
                 self.open_timecontrol_editor(
                     params,
+                    object,
                     effect,
                     track,
                     keyframe_index,
