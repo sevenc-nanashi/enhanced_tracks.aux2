@@ -42,10 +42,7 @@ impl KeyframesGui {
 
                                 let text_rect = egui::Rect::from_min_max(
                                     rect.left_top() + egui::vec2(6.0, 4.0),
-                                    egui::pos2(
-                                        rect.left() + NAME_WIDTH,
-                                        rect.bottom() - 4.0,
-                                    ),
+                                    egui::pos2(rect.left() + NAME_WIDTH, rect.bottom() - 4.0),
                                 );
                                 let layout = egui::text::LayoutJob::simple(
                                     preset.name.to_string(),

@@ -34,6 +34,8 @@ Bounce=Bounce
 この移動方法では中間点の切り替えはできません。=Midpoint is not available in this movement mode.
 （不明な移動方法）= (Unknown Movement)
 閉じる=Close
+ピン留め=Pin
+ピン留めから外す=Unpin
 
 [Tips.enhanced_tracks.aux2]
 effect.name=Allows using complex movement paths.\nUse "enhanced_tracks.aux2" under "View" to access the editor.\n\nNOTE: DO NOT EDIT THE PARAMETERS DIRECTLY.

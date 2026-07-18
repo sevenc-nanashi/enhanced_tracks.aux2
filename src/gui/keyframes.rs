@@ -6,6 +6,9 @@ use egui::epaint::{Mesh, Shape};
 static SECTION_SEPARATOR_HITBOX_WEIGHT: f32 = 4.0;
 static KEYFRAME_TIMELINE_FADE_WIDTH: f32 = 24.0;
 
+static PINNED_EASINGS_ID: std::sync::LazyLock<egui::Id> =
+    std::sync::LazyLock::new(|| egui::Id::new("pinned_easings"));
+
 struct EasingSearchItem<'a> {
     easing: &'a crate::keyframe::Easing,
     text: String,
@@ -905,6 +908,29 @@ impl KeyframesGui {
                 );
             }
         });
+        let pinned_easings = ui.data_mut(|data| {
+            data.get_persisted::<std::sync::Arc<std::sync::Mutex<Vec<String>>>>(*PINNED_EASINGS_ID)
+        });
+        if let Some(pinned_easings) = pinned_easings {
+            let pinned_easings = {
+                let pinned_easings = pinned_easings.lock().unwrap();
+
+                pinned_easings
+                    .iter()
+                    .filter_map(|easing| easings.get(easing))
+                    .map(EasingChoiceNode::Easing)
+                    .collect::<Vec<_>>()
+            };
+            self.show_easing_choice_nodes(
+                ui,
+                keyframes,
+                object,
+                effect,
+                track,
+                index,
+                &pinned_easings,
+            );
+        }
         ui.menu_button(aviutl2::config::translate("移動方法"), |ui| {
             ui.horizontal(|ui| {
                 let height = ui.text_style_height(&egui::TextStyle::Button);
@@ -1348,17 +1374,17 @@ impl KeyframesGui {
         index: usize,
         easing: &crate::keyframe::Easing,
     ) {
-        if ui
-            .add(
-                egui::Button::new(crate::utils::get_translated_effect_name(&easing.name)).selected(
-                    matches!(
-                keyframes.keyframes[index],
-                crate::keyframe::Keyframe::Easing(ref k)
-                if k.easing == easing.name),
+        let button = ui.add(
+            egui::Button::new(crate::utils::get_translated_effect_name(&easing.name)).selected(
+                matches!(
+                    keyframes.keyframes[index],
+                    crate::keyframe::Keyframe::Easing(ref k) if k.easing == easing.name
                 ),
-            )
-            .clicked()
-        {
+            ),
+        );
+        Self::show_easing_context_menu(&button, easing);
+
+        if button.clicked() {
             let new_keyframes = Self::keyframes_with_easing(keyframes, index, easing);
             let updated_params =
                 Self::update_track_keyframes(effect, track, index, new_keyframes.clone());
@@ -1388,6 +1414,36 @@ impl KeyframesGui {
             }
             ui.close();
         }
+    }
+
+    fn show_easing_context_menu(button: &egui::Response, easing: &crate::keyframe::Easing) {
+        super::sub_context_menu::show(button, |ui| {
+            let pinned = ui.data_mut(|data| {
+                data.get_persisted::<std::sync::Arc<std::sync::Mutex<Vec<String>>>>(
+                    *PINNED_EASINGS_ID,
+                )
+                .unwrap_or_else(|| {
+                    let pinned = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+                    data.insert_persisted(*PINNED_EASINGS_ID, pinned.clone());
+                    pinned
+                })
+            });
+            let is_pinned = pinned.lock().unwrap().contains(&easing.name);
+            let label = if is_pinned {
+                "ピン留めから外す"
+            } else {
+                "ピン留め"
+            };
+            if ui.button(aviutl2::config::translate(label)).clicked() {
+                let mut pinned = pinned.lock().unwrap();
+                if is_pinned {
+                    pinned.retain(|name| name != &easing.name);
+                } else {
+                    pinned.push(easing.name.clone());
+                }
+                ui.close();
+            }
+        });
     }
 
     fn keyframes_with_easing(

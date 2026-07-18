@@ -6,6 +6,7 @@ use tap::prelude::*;
 mod debug_view;
 mod edit_section_thread;
 mod keyframes;
+mod sub_context_menu;
 mod timecontrol;
 
 use edit_section_thread::EditSectionThread;
