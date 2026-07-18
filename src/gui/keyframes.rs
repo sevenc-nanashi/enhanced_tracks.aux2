@@ -5,6 +5,7 @@ use egui::epaint::{Mesh, Shape};
 
 static SECTION_SEPARATOR_HITBOX_WEIGHT: f32 = 4.0;
 static KEYFRAME_TIMELINE_FADE_WIDTH: f32 = 24.0;
+static CLOCK: &str = "🕒";
 
 static PINNED_EASINGS_ID: std::sync::LazyLock<egui::Id> =
     std::sync::LazyLock::new(|| egui::Id::new("pinned_easings"));
@@ -645,7 +646,8 @@ impl KeyframesGui {
                 crate::keyframe::Keyframe::Easing(ref easing) => {
                     if last_easing.is_some_and(|easing| easing.has_timecontrol) {
                         format!(
-                            "🕒 {}",
+                            "{} {}",
+                            CLOCK,
                             crate::utils::get_translated_effect_name(&easing.easing)
                         )
                     } else {
@@ -1375,12 +1377,19 @@ impl KeyframesGui {
         easing: &crate::keyframe::Easing,
     ) {
         let button = ui.add(
-            egui::Button::new(crate::utils::get_translated_effect_name(&easing.name)).selected(
-                matches!(
-                    keyframes.keyframes[index],
-                    crate::keyframe::Keyframe::Easing(ref k) if k.easing == easing.name
-                ),
-            ),
+            egui::Button::new({
+                let name = crate::utils::get_translated_effect_name(&easing.name);
+                if easing.has_timecontrol {
+                    // NOTE: 左に時計を持ってくると先頭がガタガタして良くないので、右に持ってくる
+                    format!("{name} {CLOCK}")
+                } else {
+                    name
+                }
+            })
+            .selected(matches!(
+                keyframes.keyframes[index],
+                crate::keyframe::Keyframe::Easing(ref k) if k.easing == easing.name
+            )),
         );
         Self::show_easing_context_menu(&button, easing);
 
