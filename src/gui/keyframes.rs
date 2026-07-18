@@ -447,7 +447,14 @@ impl KeyframesGui {
                     .get(&current_kf_info.easing)
                     .is_some_and(|easing| easing.has_timecontrol)
             {
-                self.open_timecontrol_editor(params, object, effect, track, section.0, current_kf_info);
+                self.open_timecontrol_editor(
+                    params,
+                    object,
+                    effect,
+                    track,
+                    section.0,
+                    current_kf_info,
+                );
                 tracing::info!(
                     "Opening time control dialog by double click for section {} of track {:?} in effect {:?}",
                     section.0,
@@ -926,14 +933,17 @@ impl KeyframesGui {
                 }
             });
             ui.separator();
+            let easing_search_text = self.easing_search_text.clone();
             egui::containers::ScrollArea::vertical().show(ui, |ui| {
-                Self::show_easing_choices(
+                self.show_easing_choices(
                     ui,
                     keyframes,
+                    object,
+                    effect,
+                    track,
                     index,
                     &easings,
-                    &self.easing_search_text,
-                    &mut update_keyframe,
+                    &easing_search_text,
                 );
             });
         });
@@ -1203,17 +1213,20 @@ impl KeyframesGui {
     }
 
     fn show_easing_choices(
+        &mut self,
         ui: &mut egui::Ui,
         keyframes: &crate::keyframe::Keyframes,
+        object: &SelectedObjectInfo,
+        effect: &EffectInfo,
+        track: &KeyframeTrackInfo,
         index: usize,
         easings: &indexmap::IndexMap<String, crate::keyframe::Easing>,
         search_text: &str,
-        update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
     ) {
         let search_text = search_text.trim();
         if search_text.is_empty() {
             let choices = Self::build_easing_choice_tree(easings.values());
-            Self::show_easing_choice_nodes(ui, keyframes, index, &choices, update_keyframe);
+            self.show_easing_choice_nodes(ui, keyframes, object, effect, track, index, &choices);
             return;
         }
 
@@ -1235,7 +1248,7 @@ impl KeyframesGui {
             return;
         }
         for (item, _) in matches.into_iter().take(100) {
-            Self::show_easing_choice(ui, keyframes, index, item.easing, update_keyframe);
+            self.show_easing_choice(ui, keyframes, object, effect, track, index, item.easing);
         }
     }
 
@@ -1286,26 +1299,25 @@ impl KeyframesGui {
     }
 
     fn show_easing_choice_nodes(
+        &mut self,
         ui: &mut egui::Ui,
         keyframes: &crate::keyframe::Keyframes,
+        object: &SelectedObjectInfo,
+        effect: &EffectInfo,
+        track: &KeyframeTrackInfo,
         index: usize,
         nodes: &[EasingChoiceNode<'_>],
-        update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
     ) {
         for node in nodes {
             match node {
                 EasingChoiceNode::Easing(easing) => {
-                    Self::show_easing_choice(ui, keyframes, index, easing, update_keyframe);
+                    self.show_easing_choice(ui, keyframes, object, effect, track, index, easing);
                 }
                 EasingChoiceNode::Label { label, children } => {
                     ui.menu_button(label.as_str(), |ui| {
                         egui::containers::ScrollArea::vertical().show(ui, |ui| {
-                            Self::show_easing_choice_nodes(
-                                ui,
-                                keyframes,
-                                index,
-                                children,
-                                update_keyframe,
+                            self.show_easing_choice_nodes(
+                                ui, keyframes, object, effect, track, index, children,
                             );
                         });
                     });
@@ -1327,11 +1339,14 @@ impl KeyframesGui {
     }
 
     fn show_easing_choice(
+        &mut self,
         ui: &mut egui::Ui,
         keyframes: &crate::keyframe::Keyframes,
+        object: &SelectedObjectInfo,
+        effect: &EffectInfo,
+        track: &KeyframeTrackInfo,
         index: usize,
         easing: &crate::keyframe::Easing,
-        update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
     ) {
         if ui
             .add(
@@ -1345,7 +1360,32 @@ impl KeyframesGui {
             .clicked()
         {
             let new_keyframes = Self::keyframes_with_easing(keyframes, index, easing);
-            update_keyframe(new_keyframes);
+            let updated_params =
+                Self::update_track_keyframes(effect, track, index, new_keyframes.clone());
+            if easing.has_timecontrol {
+                let Some(updated_params) = updated_params else {
+                    ui.close();
+                    return;
+                };
+                let crate::keyframe::Keyframe::Easing(keyframe) = &new_keyframes.keyframes[index]
+                else {
+                    unreachable!();
+                };
+                self.open_timecontrol_editor(
+                    &updated_params,
+                    object,
+                    effect,
+                    track,
+                    index,
+                    keyframe,
+                );
+                tracing::info!(
+                    "Opening time control dialog after selecting easing for section {} of track {:?} in effect {:?}",
+                    index,
+                    track.names,
+                    effect.name
+                );
+            }
             ui.close();
         }
     }
