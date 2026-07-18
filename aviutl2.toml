@@ -38,6 +38,10 @@ source = "i18n/English.aul2"
 destination = "Language/Default.enhanced_tracks-aux2.aul2"
 source = "i18n/Default.aul2"
 
+[artifacts.enhanced_tracks_aux2-zh-cn-aul2]
+destination = "Language/简体中文.enhanced_tracks-aux2.aul2"
+source = "i18n/简体中文.aul2"
+
 [development]
 aviutl2_version = "latest"
 catalog_dependencies = [
