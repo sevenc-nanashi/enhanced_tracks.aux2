@@ -1,3 +1,5 @@
+use aviutl2_eframe::egui::IntoAtoms as _;
+
 use super::*;
 
 static PINNED_EASINGS_ID: std::sync::LazyLock<egui::Id> =
@@ -35,6 +37,7 @@ impl KeyframesGui {
         current_level: &str,
         update_keyframe: impl FnOnce(crate::keyframe::Keyframes),
     ) {
+        let mut accesskey = crate::gui::accesskey::AccessKeyContext::root(ui.ctx());
         let easings = crate::EASINGS.read().unwrap();
         let mut update_keyframe_once = Some(update_keyframe);
         let mut update_keyframe = |new_keyframes: crate::keyframe::Keyframes| {
@@ -57,13 +60,21 @@ impl KeyframesGui {
             unreachable!();
         };
         let current_easing = easings.get(&current_keyframe.easing);
-
+        let mut accesskey = accesskey.child();
         ui.push_id("midpoint_actions", |ui| {
-            Self::show_midpoint_actions(ui, keyframes, index, current_level, &mut update_keyframe);
+            Self::show_midpoint_actions(
+                ui,
+                &mut accesskey,
+                keyframes,
+                index,
+                current_level,
+                &mut update_keyframe,
+            );
         });
         ui.push_id("easing_options", |ui| {
             if let Some(current_easing) = current_easing {
                 self.show_current_easing_options(
+                    &mut accesskey,
                     ui,
                     keyframes,
                     params,
@@ -93,6 +104,7 @@ impl KeyframesGui {
             };
             self.show_easing_choice_nodes(
                 ui,
+                &mut accesskey,
                 keyframes,
                 object,
                 effect,
@@ -101,52 +113,60 @@ impl KeyframesGui {
                 &pinned_easings,
             );
         }
-        ui.menu_button(aviutl2::config::translate("移動方法"), |ui| {
-            ui.horizontal(|ui| {
-                let height = ui.text_style_height(&egui::TextStyle::Button);
-                ui.spacing_mut().item_spacing.x = 4.0;
+        // ui.menu_button(aviutl2::config::translate("移動方法"), |ui| {
+        accesskey.add_menu_button(
+            ui,
+            egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::M),
+            aviutl2::config::translate("移動方法"),
+            |ui, accesskey| {
+                ui.horizontal(|ui| {
+                    let height = ui.text_style_height(&egui::TextStyle::Button);
+                    ui.spacing_mut().item_spacing.x = 4.0;
 
-                ui.add_sized(
-                    egui::Vec2::new(ui.available_width() - height - 4.0, height),
-                    egui::TextEdit::singleline(&mut self.easing_search_text)
-                        .margin(egui::Margin::symmetric(4, 0))
-                        .hint_text(aviutl2::config::translate("検索")),
-                );
-                if ui
-                    .add(egui::Button::new("×").min_size(egui::Vec2::splat(height)))
-                    .on_hover_text(if self.easing_search_text.is_empty() {
-                        aviutl2::config::translate("閉じる")
-                    } else {
-                        aviutl2::config::translate("検索をクリア")
-                    })
-                    .clicked()
-                {
-                    if self.easing_search_text.is_empty() {
-                        ui.close();
-                    } else {
-                        self.easing_search_text.clear();
+                    ui.add_sized(
+                        egui::Vec2::new(ui.available_width() - height - 4.0, height),
+                        egui::TextEdit::singleline(&mut self.easing_search_text)
+                            .margin(egui::Margin::symmetric(4, 0))
+                            .hint_text(aviutl2::config::translate("検索")),
+                    );
+                    if ui
+                        .add(egui::Button::new("×").min_size(egui::Vec2::splat(height)))
+                        .on_hover_text(if self.easing_search_text.is_empty() {
+                            aviutl2::config::translate("閉じる")
+                        } else {
+                            aviutl2::config::translate("検索をクリア")
+                        })
+                        .clicked()
+                    {
+                        if self.easing_search_text.is_empty() {
+                            ui.close();
+                        } else {
+                            self.easing_search_text.clear();
+                        }
                     }
-                }
-            });
-            ui.separator();
-            let easing_search_text = self.easing_search_text.clone();
-            egui::containers::ScrollArea::vertical().show(ui, |ui| {
-                self.show_easing_choices(
-                    ui,
-                    keyframes,
-                    object,
-                    effect,
-                    track,
-                    index,
-                    &easings,
-                    &easing_search_text,
-                );
-            });
-        });
+                });
+                ui.separator();
+                let easing_search_text = self.easing_search_text.clone();
+                egui::containers::ScrollArea::vertical().show(ui, |ui| {
+                    self.show_easing_choices(
+                        ui,
+                        accesskey,
+                        keyframes,
+                        object,
+                        effect,
+                        track,
+                        index,
+                        &easings,
+                        &easing_search_text,
+                    );
+                });
+            },
+        );
     }
 
     fn show_midpoint_actions(
         ui: &mut egui::Ui,
+        accesskey: &mut crate::gui::accesskey::AccessKeyContext,
         keyframes: &crate::keyframe::Keyframes,
         index: usize,
         current_level: &str,
@@ -169,9 +189,11 @@ impl KeyframesGui {
         let easings = crate::EASINGS.read().unwrap();
         let easing_info = easings.get(&last_easing.easing).unwrap_or_default();
 
-        if ui
-            .add_enabled(
+        if accesskey
+            .add_button_enabled(
+                ui,
                 !easing_info.ignore_midpoints,
+                egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::M),
                 egui::Button::new(aviutl2::config::translate("中間点")).selected(matches!(
                     keyframes.keyframes[index],
                     crate::keyframe::Keyframe::Midpoint
@@ -183,8 +205,10 @@ impl KeyframesGui {
             new_keyframes.keyframes[index] = crate::keyframe::Keyframe::Midpoint;
             update_keyframe(new_keyframes);
         }
-        if ui
-            .add(
+        if accesskey
+            .add_button(
+                ui,
+                egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::C),
                 egui::Button::new(aviutl2::config::translate("継続")).selected(matches!(
                     keyframes.keyframes[index],
                     crate::keyframe::Keyframe::Ignored
@@ -201,6 +225,7 @@ impl KeyframesGui {
 
     fn show_current_easing_options(
         &mut self,
+        accesskey: &mut crate::gui::accesskey::AccessKeyContext,
         ui: &mut egui::Ui,
         keyframes: &crate::keyframe::Keyframes,
         params: &crate::KeyframeTrackParams,
@@ -216,6 +241,7 @@ impl KeyframesGui {
         let mut has_anything = false;
         if current_easing.has_speed {
             Self::show_speed_options(
+                accesskey,
                 ui,
                 keyframes,
                 keyframe_index,
@@ -234,7 +260,14 @@ impl KeyframesGui {
             update_keyframe,
         );
         if current_easing.has_timecontrol {
-            if ui.button(aviutl2::config::translate("時間制御")).clicked() {
+            if accesskey
+                .add_button(
+                    ui,
+                    egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::T),
+                    egui::Button::new(aviutl2::config::translate("時間制御")),
+                )
+                .clicked()
+            {
                 self.open_timecontrol_editor(
                     params,
                     object,
@@ -365,6 +398,7 @@ impl KeyframesGui {
     }
 
     fn show_speed_options(
+        accesskey: &mut crate::gui::accesskey::AccessKeyContext,
         ui: &mut egui::Ui,
         keyframes: &crate::keyframe::Keyframes,
         keyframe_index: usize,
@@ -372,8 +406,10 @@ impl KeyframesGui {
         update_keyframe: &mut impl FnMut(crate::keyframe::Keyframes),
     ) {
         let mut current_acceleration = current_keyframe.acceleration;
-        if ui
-            .checkbox(
+        if accesskey
+            .add_checkbox(
+                ui,
+                egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::A),
                 &mut current_acceleration,
                 aviutl2::config::translate("加速"),
             )
@@ -390,8 +426,10 @@ impl KeyframesGui {
         }
 
         let mut current_deceleration = current_keyframe.deceleration;
-        if ui
-            .checkbox(
+        if accesskey
+            .add_checkbox(
+                ui,
+                egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::D),
                 &mut current_deceleration,
                 aviutl2::config::translate("減速"),
             )
@@ -411,6 +449,7 @@ impl KeyframesGui {
     fn show_easing_choices(
         &mut self,
         ui: &mut egui::Ui,
+        accesskey: &mut crate::gui::accesskey::AccessKeyContext,
         keyframes: &crate::keyframe::Keyframes,
         object: &SelectedObjectInfo,
         effect: &EffectInfo,
@@ -422,7 +461,9 @@ impl KeyframesGui {
         let search_text = search_text.trim();
         if search_text.is_empty() {
             let choices = Self::build_easing_choice_tree(easings.values());
-            self.show_easing_choice_nodes(ui, keyframes, object, effect, track, index, &choices);
+            self.show_easing_choice_nodes(
+                ui, accesskey, keyframes, object, effect, track, index, &choices,
+            );
             return;
         }
 
@@ -444,7 +485,16 @@ impl KeyframesGui {
             return;
         }
         for (item, _) in matches.into_iter().take(100) {
-            self.show_easing_choice(ui, keyframes, object, effect, track, index, item.easing);
+            self.show_easing_choice(
+                ui,
+                accesskey,
+                keyframes,
+                object,
+                effect,
+                track,
+                index,
+                item.easing,
+            );
         }
     }
 
@@ -497,6 +547,7 @@ impl KeyframesGui {
     fn show_easing_choice_nodes(
         &mut self,
         ui: &mut egui::Ui,
+        accesskey: &mut crate::gui::accesskey::AccessKeyContext,
         keyframes: &crate::keyframe::Keyframes,
         object: &SelectedObjectInfo,
         effect: &EffectInfo,
@@ -507,13 +558,19 @@ impl KeyframesGui {
         for node in nodes {
             match node {
                 EasingChoiceNode::Easing(easing) => {
-                    self.show_easing_choice(ui, keyframes, object, effect, track, index, easing);
+                    self.show_easing_choice(
+                        ui, accesskey, keyframes, object, effect, track, index, easing,
+                    );
                 }
                 EasingChoiceNode::Label { label, children } => {
-                    ui.menu_button(label.as_str(), |ui| {
+                    let (label, key) = crate::gui::accesskey::parse_accesskey(
+                        &crate::utils::get_translated_effect_menu_name(label),
+                    );
+                    // ui.menu_button(label.as_str(), |ui| {
+                    accesskey.add_menu_button(ui, key, label, |ui, accesskey| {
                         egui::containers::ScrollArea::vertical().show(ui, |ui| {
                             self.show_easing_choice_nodes(
-                                ui, keyframes, object, effect, track, index, children,
+                                ui, accesskey, keyframes, object, effect, track, index, children,
                             );
                         });
                     });
@@ -537,6 +594,7 @@ impl KeyframesGui {
     fn show_easing_choice(
         &mut self,
         ui: &mut egui::Ui,
+        accesskey: &mut crate::gui::accesskey::AccessKeyContext,
         keyframes: &crate::keyframe::Keyframes,
         object: &SelectedObjectInfo,
         effect: &EffectInfo,
@@ -544,12 +602,15 @@ impl KeyframesGui {
         index: usize,
         easing: &crate::keyframe::Easing,
     ) {
-        let button = ui.add(
+        let name = crate::utils::get_translated_effect_menu_name(&easing.name);
+        let (name, key) = crate::gui::accesskey::parse_accesskey(&name);
+        let button = accesskey.add_button(
+            ui,
+            key,
             egui::Button::new({
-                let name = crate::utils::get_translated_effect_name(&easing.name);
                 if easing.has_timecontrol {
                     // NOTE: 左に時計を持ってくると先頭がガタガタして良くないので、右に持ってくる
-                    format!("{name} {CLOCK}")
+                    (name, CLOCK.into_atoms()).into_atoms()
                 } else {
                     name
                 }
@@ -611,7 +672,10 @@ impl KeyframesGui {
             } else {
                 "ピン留め"
             };
-            if ui.button(aviutl2::config::translate(label)).clicked() {
+            if ui
+                .button(crate::utils::get_translated_effect_name(label))
+                .clicked()
+            {
                 let mut pinned = pinned.lock().unwrap();
                 if is_pinned {
                     pinned.retain(|name| name != &easing.name);

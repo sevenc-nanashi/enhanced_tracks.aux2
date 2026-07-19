@@ -256,24 +256,28 @@ impl KeyframesGui {
         let can_change = segment_index + 1 < timecontrol.points.len();
         ui.add_enabled_ui(can_change, |ui| {
             ui.menu_button(aviutl2::config::translate("区間方式"), |ui| {
-                for (mode, label) in [
+                for (mode, label, shortcut) in [
                     (
                         crate::keyframe::TimeControlMode::Bezier,
                         aviutl2::config::translate("ベジェ"),
+                        &BEZIER_SEGMENT_MODE_MENU_SHORTCUT,
                     ),
                     (
                         crate::keyframe::TimeControlMode::Elastic,
                         aviutl2::config::translate("Elastic"),
+                        &ELASTIC_SEGMENT_MODE_MENU_SHORTCUT,
                     ),
                     (
                         crate::keyframe::TimeControlMode::Bounce,
                         aviutl2::config::translate("Bounce"),
+                        &BOUNCE_SEGMENT_MODE_MENU_SHORTCUT,
                     ),
                 ] {
                     if ui
-                        .selectable_label(
-                            timecontrol.segment_mode(segment_index) == Some(mode),
-                            label,
+                        .add(
+                            egui::Button::new(label)
+                                .selected(timecontrol.segment_mode(segment_index) == Some(mode))
+                                .shortcut_text(ui.format_shortcut(shortcut)),
                         )
                         .clicked()
                     {
@@ -294,31 +298,54 @@ impl KeyframesGui {
         timecontrol: &mut crate::keyframe::TimeControl,
         segment_index: usize,
     ) -> bool {
-        let mut changed = false;
-        if timecontrol.segment_mode(segment_index) == Some(crate::keyframe::TimeControlMode::Bezier)
-        {
-            if ui.button(aviutl2::config::translate("反転")).clicked() {
-                Self::reverse_timecontrol_bezier_segment(timecontrol, segment_index);
-                changed = true;
-                ui.close();
-            }
-            return changed;
-        }
-
-        let Some(mut reversed) = timecontrol.segment_reversed(segment_index) else {
+        let Some(mode) = timecontrol.segment_mode(segment_index) else {
             return false;
         };
-        if ui
-            .checkbox(&mut reversed, aviutl2::config::translate("反転"))
-            .changed()
-        {
-            if timecontrol.segment_reversed(segment_index) != Some(reversed) {
-                timecontrol.set_segment_reversed(segment_index, reversed);
-                changed = true;
+        let selected = match mode {
+            crate::keyframe::TimeControlMode::Bezier => false,
+            crate::keyframe::TimeControlMode::Elastic
+            | crate::keyframe::TimeControlMode::Bounce => {
+                let Some(reversed) = timecontrol.segment_reversed(segment_index) else {
+                    unreachable!("ElasticまたはBounceの区間には反転状態があるはず");
+                };
+                reversed
             }
+        };
+        if ui
+            .add(
+                egui::Button::new(aviutl2::config::translate("反転"))
+                    .selected(selected)
+                    .shortcut_text(ui.format_shortcut(&REVERSE_SHORTCUT)),
+            )
+            .clicked()
+        {
+            let changed = Self::reverse_timecontrol_segment(timecontrol, segment_index);
             ui.close();
+            return changed;
         }
-        changed
+        false
+    }
+
+    pub(super) fn reverse_timecontrol_segment(
+        timecontrol: &mut crate::keyframe::TimeControl,
+        segment_index: usize,
+    ) -> bool {
+        let Some(mode) = timecontrol.segment_mode(segment_index) else {
+            return false;
+        };
+        match mode {
+            crate::keyframe::TimeControlMode::Bezier => {
+                Self::reverse_timecontrol_bezier_segment(timecontrol, segment_index);
+            }
+            crate::keyframe::TimeControlMode::Elastic
+            | crate::keyframe::TimeControlMode::Bounce => {
+                let Some(reversed) = timecontrol.segment_reversed(segment_index) else {
+                    unreachable!("ElasticまたはBounceの区間には反転状態があるはず");
+                };
+                timecontrol.set_segment_reversed(segment_index, !reversed);
+            }
+        }
+        true
     }
 
     pub fn reverse_timecontrol_bezier_segment(
@@ -609,7 +636,10 @@ impl KeyframesGui {
         *selected_point = (*selected_point).min(timecontrol.points.len().saturating_sub(1));
 
         if ui
-            .button(aviutl2::config::translate("中継点追加"))
+            .add(
+                egui::Button::new(aviutl2::config::translate("中継点追加"))
+                    .shortcut_text(ui.format_shortcut(&ADD_POINT_SHORTCUT)),
+            )
             .clicked()
         {
             *selected_point = Self::insert_timecontrol_point(timecontrol, add_point_position);
@@ -621,7 +651,8 @@ impl KeyframesGui {
         if ui
             .add_enabled(
                 can_remove,
-                egui::Button::new(aviutl2::config::translate("中継点削除")),
+                egui::Button::new(aviutl2::config::translate("中継点削除"))
+                    .shortcut_text(ui.format_shortcut(&REMOVE_POINT_SHORTCUT)),
             )
             .clicked()
         {
@@ -692,15 +723,14 @@ impl KeyframesGui {
             aviutl2::config::translate("ハンドル分離")
         };
         if ui
-            .add_enabled(has_both_handles, egui::Button::new(label))
+            .add_enabled(
+                has_both_handles,
+                egui::Button::new(label)
+                    .shortcut_text(ui.format_shortcut(&SEPARATE_HANDLES_SHORTCUT)),
+            )
             .clicked()
         {
-            timecontrol.points[*selected_point].handles_separated =
-                !timecontrol.points[*selected_point].handles_separated;
-            if !timecontrol.points[*selected_point].handles_separated {
-                Self::mirror_timecontrol_handle(timecontrol, *selected_point, true);
-            }
-            changed = true;
+            changed = Self::toggle_timecontrol_handle_separation(timecontrol, *selected_point);
             ui.close();
         }
 
@@ -719,6 +749,25 @@ impl KeyframesGui {
         }
 
         changed
+    }
+
+    pub(super) fn toggle_timecontrol_handle_separation(
+        timecontrol: &mut crate::keyframe::TimeControl,
+        point_index: usize,
+    ) -> bool {
+        let Some(point) = timecontrol.points.get(point_index) else {
+            return false;
+        };
+        if point.in_handle.is_none() || point.out_handle.is_none() {
+            return false;
+        }
+
+        timecontrol.points[point_index].handles_separated =
+            !timecontrol.points[point_index].handles_separated;
+        if !timecontrol.points[point_index].handles_separated {
+            Self::mirror_timecontrol_handle(timecontrol, point_index, true);
+        }
+        true
     }
 
     pub fn clamped_timecontrol_anchor_position(

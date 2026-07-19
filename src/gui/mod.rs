@@ -3,6 +3,7 @@ use aviutl2::generic::GenericPlugin;
 use aviutl2_eframe::{eframe, egui};
 use tap::prelude::*;
 
+mod accesskey;
 mod debug_view;
 mod edit_section_thread;
 mod keyframes;

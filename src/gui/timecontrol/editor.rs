@@ -96,6 +96,20 @@ impl KeyframesGui {
                 .interact_pointer_pos()
                 .map(|pos| viewport.screen_to_graph(pos));
         }
+        let (shortcut_changed, shortcut_commit_requested) =
+            Self::handle_timecontrol_editor_shortcuts(
+                ui,
+                &response,
+                timecontrol,
+                selected_point,
+                context_menu_position,
+                clipboard,
+                visible_y_bounds,
+                drag_scroll_y_bounds,
+                viewport,
+            );
+        changed |= shortcut_changed;
+        commit_requested |= shortcut_commit_requested;
         response.context_menu(|ui| {
             if Self::show_timecontrol_segment_mode_menu(ui, timecontrol, *selected_point) {
                 changed = true;
@@ -105,27 +119,42 @@ impl KeyframesGui {
                 changed = true;
                 commit_requested = true;
             }
-            if ui.button(aviutl2::config::translate("コピー")).clicked() {
+            if ui
+                .add(
+                    egui::Button::new(aviutl2::config::translate("コピー"))
+                        .shortcut_text(ui.format_shortcut(&COPY_SHORTCUT)),
+                )
+                .clicked()
+            {
                 *clipboard = Some(timecontrol.clone());
                 ui.close();
             }
             let can_paste = clipboard.is_some();
-            ui.add_enabled_ui(can_paste, |ui| {
-                if ui.button(aviutl2::config::translate("貼り付け")).clicked() {
-                    if let Some(copied) = clipboard.clone() {
-                        *timecontrol = copied;
-                        *selected_point = 0;
-                        *context_menu_position = None;
-                        *visible_y_bounds = None;
-                        *drag_scroll_y_bounds = None;
-                        changed = true;
-                        commit_requested = true;
-                    }
-                    ui.close();
-                }
-            });
             if ui
-                .button(aviutl2::config::translate("中継点追加"))
+                .add_enabled(
+                    can_paste,
+                    egui::Button::new(aviutl2::config::translate("貼り付け"))
+                        .shortcut_text(ui.format_shortcut(&PASTE_SHORTCUT)),
+                )
+                .clicked()
+            {
+                let Some(copied) = clipboard.clone() else {
+                    unreachable!("貼り付け可能な場合はクリップボードに値があるはず");
+                };
+                *timecontrol = copied;
+                *selected_point = 0;
+                *context_menu_position = None;
+                *visible_y_bounds = None;
+                *drag_scroll_y_bounds = None;
+                changed = true;
+                commit_requested = true;
+                ui.close();
+            }
+            if ui
+                .add(
+                    egui::Button::new(aviutl2::config::translate("中継点追加"))
+                        .shortcut_text(ui.format_shortcut(&ADD_POINT_SHORTCUT)),
+                )
                 .clicked()
             {
                 *selected_point = Self::insert_timecontrol_point(
@@ -224,6 +253,116 @@ impl KeyframesGui {
         }
 
         (changed, commit_requested)
+    }
+
+    fn handle_timecontrol_editor_shortcuts(
+        ui: &mut egui::Ui,
+        response: &egui::Response,
+        timecontrol: &mut crate::keyframe::TimeControl,
+        selected_point: &mut usize,
+        context_menu_position: &mut Option<[f64; 2]>,
+        clipboard: &mut Option<crate::keyframe::TimeControl>,
+        visible_y_bounds: &mut Option<TimeControlVerticalBounds>,
+        drag_scroll_y_bounds: &mut Option<TimeControlVerticalBounds>,
+        viewport: TimeControlViewport,
+    ) -> (bool, bool) {
+        if ui.input_mut(|input| input.consume_shortcut(&COPY_SHORTCUT)) {
+            *clipboard = Some(timecontrol.clone());
+            egui::Popup::close_all(ui.ctx());
+        }
+
+        let can_paste = clipboard.is_some();
+        if can_paste && ui.input_mut(|input| input.consume_shortcut(&PASTE_SHORTCUT)) {
+            let Some(copied) = clipboard.clone() else {
+                unreachable!("貼り付け可能な場合はクリップボードに値があるはず");
+            };
+            *timecontrol = copied;
+            *selected_point = 0;
+            *context_menu_position = None;
+            *visible_y_bounds = None;
+            *drag_scroll_y_bounds = None;
+            egui::Popup::close_all(ui.ctx());
+            return (true, true);
+        }
+
+        let can_remove = *selected_point != 0 && *selected_point + 1 < timecontrol.points.len();
+        if can_remove && ui.input_mut(|input| input.consume_shortcut(&REMOVE_POINT_SHORTCUT)) {
+            Self::remove_timecontrol_point(timecontrol, selected_point);
+            egui::Popup::close_all(ui.ctx());
+            return (true, true);
+        }
+
+        let has_both_handles = timecontrol.points[*selected_point].in_handle.is_some()
+            && timecontrol.points[*selected_point].out_handle.is_some();
+        if has_both_handles
+            && ui.input_mut(|input| input.consume_shortcut(&SEPARATE_HANDLES_SHORTCUT))
+        {
+            let changed = Self::toggle_timecontrol_handle_separation(timecontrol, *selected_point);
+            if changed {
+                egui::Popup::close_all(ui.ctx());
+            }
+            return (changed, changed);
+        }
+
+        let pointer_position = ui
+            .input(|input| input.pointer.hover_pos())
+            .filter(|pointer_pos| response.rect.contains(*pointer_pos))
+            .map(|pointer_pos| viewport.screen_to_graph(pointer_pos));
+        let add_point_position = if egui::Popup::is_any_open(ui.ctx()) {
+            *context_menu_position
+        } else {
+            pointer_position
+        };
+        if let Some(add_point_position) = add_point_position
+            && ui.input_mut(|input| input.consume_shortcut(&ADD_POINT_SHORTCUT))
+        {
+            *selected_point = Self::insert_timecontrol_point(timecontrol, add_point_position);
+            egui::Popup::close_all(ui.ctx());
+            return (true, true);
+        }
+
+        let can_change_segment = *selected_point + 1 < timecontrol.points.len();
+        if !can_change_segment {
+            return (false, false);
+        }
+
+        let mode = [
+            (
+                &BEZIER_SEGMENT_MODE_MENU_SHORTCUT,
+                crate::keyframe::TimeControlMode::Bezier,
+            ),
+            (
+                &ELASTIC_SEGMENT_MODE_MENU_SHORTCUT,
+                crate::keyframe::TimeControlMode::Elastic,
+            ),
+            (
+                &BOUNCE_SEGMENT_MODE_MENU_SHORTCUT,
+                crate::keyframe::TimeControlMode::Bounce,
+            ),
+        ]
+        .into_iter()
+        .find_map(|(shortcut, mode)| {
+            ui.input_mut(|input| input.consume_shortcut(shortcut))
+                .then_some(mode)
+        });
+        if let Some(mode) = mode {
+            let changed = timecontrol.segment_mode(*selected_point) != Some(mode);
+            if changed {
+                timecontrol.set_segment_mode(*selected_point, mode);
+            }
+            egui::Popup::close_all(ui.ctx());
+            return (changed, changed);
+        }
+
+        if ui.input_mut(|input| input.consume_shortcut(&REVERSE_SHORTCUT)) {
+            let changed = Self::reverse_timecontrol_segment(timecontrol, *selected_point);
+            if changed {
+                egui::Popup::close_all(ui.ctx());
+            }
+            return (changed, changed);
+        }
+
+        (false, false)
     }
 
     pub fn timecontrol_editor_vertical_bounds(

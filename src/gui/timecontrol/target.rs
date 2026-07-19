@@ -60,7 +60,19 @@ impl KeyframesGui {
 
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            if ui.button(aviutl2::config::translate("戻る")).clicked() {
+            if ui
+                .add(egui::Button::new(aviutl2::config::translate("戻る")).shortcut_text("X"))
+                .clicked()
+                || ui.input_mut(|input| {
+                    input.consume_shortcut(&egui::KeyboardShortcut::new(
+                        egui::Modifiers::NONE,
+                        egui::Key::X,
+                    )) || input.consume_shortcut(&egui::KeyboardShortcut::new(
+                        egui::Modifiers::NONE,
+                        egui::Key::Escape,
+                    ))
+                })
+            {
                 tracing::info!(
                     "Closing time control editor for effect {:?}, tracks {:?}, keyframe index {:?}",
                     target.effect_name,
