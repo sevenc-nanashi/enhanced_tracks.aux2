@@ -128,7 +128,7 @@ fn find_stale_keyframe_bindings(
     let info = crate::EDIT_HANDLE.get_edit_info();
     let mut bindings =
         indexmap::IndexMap::<crate::KeyframeTrackParams, Vec<crate::KeyframeBinding>>::new();
-    tracing::info!(
+    tracing::debug!(
         "Scanning for keyframe track params in {} layers",
         info.layer_max + 1
     );
