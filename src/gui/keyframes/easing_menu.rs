@@ -116,7 +116,7 @@ impl KeyframesGui {
         // ui.menu_button(aviutl2::config::translate("移動方法"), |ui| {
         accesskey.add_menu_button(
             ui,
-            egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::M),
+            egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::E),
             aviutl2::config::translate("移動方法"),
             |ui, accesskey| {
                 ui.horizontal(|ui| {
