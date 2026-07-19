@@ -122,21 +122,23 @@ impl AccessKeyContext {
 
         self.process_last_frame_pressed(ui, shortcut_key, id);
 
-        ui.menu_button(
-            (
-                button_atoms,
-                if shortcut_key != NO_SHORTCUT {
-                    egui::AtomKind::text(
-                        egui::RichText::new(format!(" ({})", ui.format_shortcut(&shortcut_key)))
-                            .weak(),
-                    )
-                    .into_atoms()
-                } else {
-                    egui::AtomKind::Empty.into_atoms()
-                },
+        let button = egui::menu::SubMenuButton::from_button(
+            egui::Button::new(button_atoms).right_text(
+                (
+                    if shortcut_key != NO_SHORTCUT {
+                        egui::RichText::new(ui.format_shortcut(&shortcut_key))
+                            .weak()
+                            .into_atoms()
+                    } else {
+                        egui::AtomKind::Empty.into_atoms()
+                    },
+                    egui::menu::SubMenuButton::RIGHT_ARROW,
+                )
+                    .into_atoms(),
             ),
-            |ui| add_contents(ui, &mut self.child()),
-        )
+        );
+        let (response, inner) = button.ui(ui, |ui| add_contents(ui, &mut self.child()));
+        egui::InnerResponse::new(inner.map(|i| i.inner), response)
     }
 
     pub fn add_checkbox<'b>(
