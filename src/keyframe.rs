@@ -1099,6 +1099,19 @@ pub fn timecontrol_presets() -> Vec<TimeControlPreset> {
     ]
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct EasingParam {
+    pub param_type: EasingParamType,
+    pub default_value: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EasingParamType {
+    Number,
+    Boolean,
+    Enum(indexmap::IndexMap<String, f64>),
+}
+
 #[derive(Debug, Clone)]
 pub struct Easing {
     pub name: String,
@@ -1111,7 +1124,7 @@ pub struct Easing {
     pub default_deceleration: bool,
     pub has_timecontrol: bool,
     pub ignore_midpoints: bool,
-    pub params: indexmap::IndexMap<String, f64>,
+    pub params: indexmap::IndexMap<String, EasingParam>,
 }
 impl Default for Easing {
     fn default() -> Self {
@@ -1175,17 +1188,8 @@ impl Easing {
             if line.trim() == "--timecontrol" {
                 easing.has_timecontrol = true;
             }
-            if let Some((_, param_name, param_value)) =
-                lazy_regex::regex_captures!(r"--param:([^,]+),(-?\d*\.?\d+)", line.trim())
-            {
-                let param_value: f64 = param_value.parse().unwrap_or(0.0);
-                easing.params.insert(param_name.to_string(), param_value);
-            }
-            if let Some((_, param_captures)) =
-                lazy_regex::regex_captures!(r"--param:(-?\d*\.?\d+)", line.trim())
-            {
-                let param_value: f64 = param_captures.parse().unwrap_or(0.0);
-                easing.params.insert("設定値".to_string(), param_value);
+            if let Some((param_name, param)) = Self::parse_param(line.trim()) {
+                easing.params.insert(param_name, param);
             }
             if line.trim() == "--twopoint" {
                 easing.ignore_midpoints = true;
@@ -1196,6 +1200,71 @@ impl Easing {
         }
 
         easing
+    }
+
+    fn parse_param(line: &str) -> Option<(String, EasingParam)> {
+        let definition = line.strip_prefix("--param:")?;
+        let Some((type_definition, default_value)) = definition.split_once(',') else {
+            let default_value = definition.parse().ok()?;
+            return Some((
+                "設定値".to_string(),
+                EasingParam {
+                    param_type: EasingParamType::Number,
+                    default_value,
+                },
+            ));
+        };
+        let default_value = default_value.parse().ok()?;
+
+        if let Some(param_name) = type_definition.strip_suffix("/check") {
+            if param_name.is_empty() || !matches!(default_value, 0.0 | 1.0) {
+                return None;
+            }
+            return Some((
+                param_name.to_string(),
+                EasingParam {
+                    param_type: EasingParamType::Boolean,
+                    default_value,
+                },
+            ));
+        }
+
+        if let Some((param_name, choices_definition)) = type_definition.split_once("/select/") {
+            if param_name.is_empty() {
+                return None;
+            }
+            let choices = choices_definition
+                .split('/')
+                .map(|choice| {
+                    let (label, value) = choice.split_once('=')?;
+                    if label.is_empty() {
+                        return None;
+                    }
+                    Some((label.to_string(), value.parse().ok()?))
+                })
+                .collect::<Option<indexmap::IndexMap<_, _>>>()?;
+            if choices.is_empty() {
+                return None;
+            }
+            return Some((
+                param_name.to_string(),
+                EasingParam {
+                    param_type: EasingParamType::Enum(choices),
+                    default_value,
+                },
+            ));
+        }
+
+        if type_definition.is_empty() {
+            return None;
+        }
+        Some((
+            type_definition.to_string(),
+            EasingParam {
+                param_type: EasingParamType::Number,
+                default_value,
+            },
+        ))
     }
 
     pub fn from_multi_script(
@@ -1265,6 +1334,74 @@ impl Easing {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn easing_parses_number_boolean_and_enum_params_in_definition_order() {
+        let easing = Easing::from_script(
+            None,
+            "test",
+            "\
+--param:1.5
+--param:量,-2.25
+--param:有効/check,1
+--param:種別/select/直線=1/曲線=2,2",
+        );
+
+        assert_eq!(
+            easing.params.keys().collect::<Vec<_>>(),
+            ["設定値", "量", "有効", "種別"]
+        );
+        assert_eq!(
+            easing.params["設定値"],
+            EasingParam {
+                param_type: EasingParamType::Number,
+                default_value: 1.5,
+            }
+        );
+        assert_eq!(
+            easing.params["量"],
+            EasingParam {
+                param_type: EasingParamType::Number,
+                default_value: -2.25,
+            }
+        );
+        assert_eq!(
+            easing.params["有効"],
+            EasingParam {
+                param_type: EasingParamType::Boolean,
+                default_value: 1.0,
+            }
+        );
+        assert_eq!(
+            easing.params["種別"],
+            EasingParam {
+                param_type: EasingParamType::Enum(indexmap::indexmap! {
+                    "直線".to_string() => 1.0,
+                    "曲線".to_string() => 2.0,
+                }),
+                default_value: 2.0,
+            }
+        );
+    }
+
+    #[test]
+    fn easing_ignores_invalid_param_definitions() {
+        let easing = Easing::from_script(
+            None,
+            "test",
+            "\
+--param:not-a-number
+--param:数値,not-a-number
+--param:/check,0
+--param:チェック/check,2
+--param:/select/有効=1,1
+--param:空/select/,1
+--param:値なし/select/選択肢=,1
+--param:ラベルなし/select/=1,1",
+        );
+
+        assert!(easing.params.is_empty());
+    }
 
     #[test]
     fn default_timecontrol_bezier_maps_x_to_same_y() {

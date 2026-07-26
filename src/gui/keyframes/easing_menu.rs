@@ -304,12 +304,12 @@ impl KeyframesGui {
             return false;
         }
 
-        for (param_index, (param_name, default_value)) in current_easing.params.iter().enumerate() {
+        for (param_index, (param_name, param)) in current_easing.params.iter().enumerate() {
             let current_value = current_keyframe
                 .params
                 .get(param_index)
                 .copied()
-                .unwrap_or(*default_value);
+                .unwrap_or(param.default_value);
             let id = ui.id().with((
                 "easing_param",
                 *params,
@@ -327,38 +327,90 @@ impl KeyframesGui {
                     param_name,
                 );
                 ui.label(format!("{param_name}: "));
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut value)
-                        .desired_width(80.0)
-                        .margin(egui::Margin::symmetric(4, 0))
-                        .char_limit(32),
-                );
+                let new_value =
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        match &param.param_type {
+                            crate::keyframe::EasingParamType::Number => {
+                                let response = ui.add(
+                                    egui::TextEdit::singleline(&mut value)
+                                        .desired_width(80.0)
+                                        .margin(egui::Margin::symmetric(4, 0))
+                                        .char_limit(32),
+                                );
 
-                if response.changed() {
-                    ui.data_mut(|data| {
-                        data.insert_temp(id, value.clone());
-                    });
-                }
+                                if response.changed() {
+                                    ui.data_mut(|data| {
+                                        data.insert_temp(id, value.clone());
+                                    });
+                                }
+                                if response.lost_focus() {
+                                    ui.data_mut(|data| {
+                                        data.remove::<String>(id);
+                                    });
+                                    value.trim().parse::<f64>().ok()
+                                } else {
+                                    None
+                                }
+                            }
+                            crate::keyframe::EasingParamType::Boolean => {
+                                let mut checked = current_value == 1.0;
+                                ui.checkbox(&mut checked, "")
+                                    .changed()
+                                    .then_some(if checked { 1.0 } else { 0.0 })
+                            }
+                            crate::keyframe::EasingParamType::Enum(choices) => {
+                                let selected_text = choices
+                                    .iter()
+                                    .find(|(_, choice_value)| **choice_value == current_value)
+                                    .map_or_else(
+                                        || Self::format_easing_param_value(current_value),
+                                        |(label, _)| {
+                                            crate::utils::get_translated_effect_select_label(
+                                                &current_easing.name,
+                                                label,
+                                            )
+                                        },
+                                    );
+                                let mut selected_value = current_value;
+                                ui.push_id(id, |ui| {
+                                    ui.menu_button(selected_text, |ui| {
+                                        for (label, choice_value) in choices {
+                                            let label =
+                                                crate::utils::get_translated_effect_select_label(
+                                                    &current_easing.name,
+                                                    label,
+                                                );
+                                            if ui
+                                                .selectable_label(
+                                                    selected_value == *choice_value,
+                                                    label,
+                                                )
+                                                .clicked()
+                                            {
+                                                selected_value = *choice_value;
+                                                ui.close();
+                                            }
+                                        }
+                                    });
+                                });
+                                (selected_value != current_value).then_some(selected_value)
+                            }
+                        }
+                    })
+                    .inner;
 
-                if response.lost_focus() {
-                    ui.data_mut(|data| {
-                        data.remove::<String>(id);
-                    });
-
-                    let Ok(value) = value.trim().parse::<f64>() else {
-                        return;
-                    };
-                    if (value - current_value).abs() > f64::EPSILON {
-                        let mut new_keyframes = keyframes.clone();
-                        Self::set_easing_param_value(
-                            &mut new_keyframes,
-                            current_easing,
-                            keyframe_index,
-                            param_index,
-                            value,
-                        );
-                        update_keyframe(new_keyframes);
-                    }
+                if let Some(new_value) = new_value
+                    && (new_value - current_value).abs() > f64::EPSILON
+                {
+                    let mut new_keyframes = keyframes.clone();
+                    Self::set_easing_param_value(
+                        &mut new_keyframes,
+                        current_easing,
+                        keyframe_index,
+                        param_index,
+                        new_value,
+                    );
+                    update_keyframe(new_keyframes);
                 }
             });
         }
@@ -390,8 +442,8 @@ impl KeyframesGui {
                 .params
                 .values()
                 .nth(keyframe.params.len())
-                .copied()
-                .unwrap_or_default();
+                .expect("不足しているパラメーターの定義が存在するはず")
+                .default_value;
             keyframe.params.push(default_value);
         }
         keyframe.params[param_index] = value;
@@ -698,7 +750,11 @@ impl KeyframesGui {
                 easing: easing.name.clone(),
                 acceleration: easing.default_acceleration,
                 deceleration: easing.default_deceleration,
-                params: easing.params.values().cloned().collect(),
+                params: easing
+                    .params
+                    .values()
+                    .map(|param| param.default_value)
+                    .collect(),
                 timecontrol: crate::keyframe::TimeControl::default(),
             });
 

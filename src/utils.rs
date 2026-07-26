@@ -28,13 +28,21 @@ pub fn get_translated_effect_menu_name(effect_name: &str) -> String {
 
 pub fn get_translated_effect_param_name(effect_name: &str, param_name: &str) -> String {
     let (_, param_name) = param_name.rsplit_once("::").unwrap_or(("", param_name));
-    let effect_param_translation = aviutl2::config::get_language_text(effect_name, param_name);
-    if effect_param_translation != param_name {
+    get_translated_effect_item(effect_name, param_name)
+}
+
+pub fn get_translated_effect_select_label(effect_name: &str, label: &str) -> String {
+    get_translated_effect_item(effect_name, label)
+}
+
+fn get_translated_effect_item(effect_name: &str, item: &str) -> String {
+    let effect_param_translation = aviutl2::config::get_language_text(effect_name, item);
+    if effect_param_translation != item {
         return effect_param_translation;
     }
-    let effect_param_translation = aviutl2::config::get_language_text("Effect", param_name);
-    if effect_param_translation != param_name {
+    let effect_param_translation = aviutl2::config::get_language_text("Effect", item);
+    if effect_param_translation != item {
         return effect_param_translation;
     }
-    param_name.to_string()
+    item.to_string()
 }
