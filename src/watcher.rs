@@ -118,6 +118,13 @@ pub fn refresh_bindings() {
     {
         tracing::error!("Failed to apply keyframe bindings change: {:?}", e);
     }
+    let update_unused = crate::EDIT_HANDLE.call_read_section(|read| {
+        let info = crate::EDIT_HANDLE.get_edit_info();
+        crate::mark_unused_keyframes(&info, read);
+    });
+    if let Err(e) = update_unused {
+        tracing::error!("Failed to update unused keyframes: {:?}", e);
+    }
 }
 
 fn find_stale_keyframe_bindings(

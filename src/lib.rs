@@ -39,6 +39,12 @@ pub static OBJECT_ID_TO_HANDLE: std::sync::LazyLock<
 pub static KEYFRAMES: std::sync::LazyLock<
     dashmap::DashMap<KeyframeTrackParams, crate::keyframe::Keyframes>,
 > = std::sync::LazyLock::new(dashmap::DashMap::new);
+pub static UNUSED_KEYFRAMES: std::sync::LazyLock<
+    std::sync::Mutex<
+        std::collections::HashMap<i32, std::collections::HashSet<KeyframeTrackParams>>,
+    >,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
 pub static KEYFRAME_FRAMES: std::sync::LazyLock<dashmap::DashMap<KeyframeTrackParams, Vec<usize>>> =
     std::sync::LazyLock::new(dashmap::DashMap::new);
 pub static CURRENT_BANK: std::sync::LazyLock<std::sync::Mutex<usize>> =
@@ -300,6 +306,10 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
 
     fn on_project_load(&mut self, project: &mut aviutl2::generic::ProjectFile) {
         refresh_project_session_nonce();
+        {
+            let mut unused_keyframes = UNUSED_KEYFRAMES.lock().unwrap();
+            unused_keyframes.clear();
+        }
         if EFFECTS.is_empty() {
             match load_effects() {
                 Ok(_) => {
@@ -327,23 +337,39 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
     }
 
     fn on_project_save(&mut self, project: &mut aviutl2::generic::ProjectFile) {
+        // NOTE: 最悪ここで失敗しても特に問題ない
+        let _ = EDIT_HANDLE.call_read_section(|edit| {
+            let info = EDIT_HANDLE.get_edit_info();
+            mark_unused_keyframes(&info, edit);
+        });
         project.clear_params();
         project
             .serialize("last_bank_id", &*CURRENT_BANK.lock().unwrap())
             .unwrap();
+        let unused_keyframes = UNUSED_KEYFRAMES.lock().unwrap();
         let keyframes: Vec<(KeyframeTrackParams, crate::keyframe::Keyframes)> = KEYFRAMES
             .iter()
-            .map(|entry| (*entry.key(), entry.value().clone()))
+            // .map(|entry| (*entry.key(), entry.value().clone()))
+            .filter_map(|entry| {
+                let params = *entry.key();
+                if let Some(unused) = unused_keyframes.get(&params.scene_id) {
+                    if unused.contains(&params) {
+                        return None;
+                    }
+                }
+                Some((params, entry.value().clone()))
+            })
             .collect();
+        tracing::info!("Saving {} keyframe tracks to project", keyframes.len());
         project.serialize("keyframes", &keyframes).unwrap();
     }
 
     fn event_change_scene_info(&mut self) {
-        let update = EDIT_HANDLE.call_read_section(|edit| {
+        let update = EDIT_HANDLE.call_read_section(|_edit| {
             let info = EDIT_HANDLE.get_edit_info();
             if info.scene_id != self.last_scene_id {
                 tracing::info!(
-                    "Scene changed from {} to {}, clearing unused keyframes",
+                    "Scene changed from {} to {}",
                     self.last_scene_id,
                     info.scene_id
                 );
@@ -351,7 +377,6 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
                     let mut current_bank_id = CURRENT_BANK.lock().unwrap();
                     *current_bank_id += 1;
                 }
-                clear_unused_keyframes(&info, edit);
                 self.watcher.notify_object_change();
             }
             self.last_scene_id = info.scene_id;
@@ -389,7 +414,10 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
     }
 }
 
-fn clear_unused_keyframes(info: &aviutl2::generic::EditInfo, read: &aviutl2::generic::ReadSection) {
+pub(crate) fn mark_unused_keyframes(
+    info: &aviutl2::generic::EditInfo,
+    read: &aviutl2::generic::ReadSection,
+) {
     let mut used_keyframes = std::collections::HashSet::new();
     for layer_index in 0..=info.layer_max {
         let layer = read.layer(layer_index);
@@ -404,14 +432,22 @@ fn clear_unused_keyframes(info: &aviutl2::generic::EditInfo, read: &aviutl2::gen
             }
         }
     }
-    let before_len = KEYFRAMES.len();
-    let current_bank_id = *CURRENT_BANK.lock().unwrap();
-    KEYFRAMES.retain(|params, _| {
-        params.bank_id == current_bank_id
-            || params.scene_id != info.scene_id
-            || used_keyframes.contains(params)
-    });
-    tracing::info!("Removed {} unused keyframes", before_len - KEYFRAMES.len());
+    let unused = KEYFRAMES
+        .iter()
+        .map(|entry| *entry.key())
+        .filter(|key| key.scene_id == info.scene_id && !used_keyframes.contains(key))
+        .collect::<std::collections::HashSet<_>>();
+    let n_unused = unused.len();
+    UNUSED_KEYFRAMES
+        .lock()
+        .unwrap()
+        .insert(info.scene_id, unused);
+
+    tracing::debug!(
+        "Scene {}: Marked {} keyframe tracks as unused",
+        info.scene_id,
+        n_unused
+    );
 }
 
 fn load_effects() -> anyhow::Result<()> {
