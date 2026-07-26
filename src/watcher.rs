@@ -315,10 +315,7 @@ fn object_keyframe_frames(
     let section_num = read.get_object_section_num(object)?;
     let mut frames = Vec::with_capacity(section_num + 1);
     for section in 0..section_num {
-        frames.push(
-            read.get_object_section_frame(object, section)?
-                .ok_or_else(|| anyhow::anyhow!("Failed to get frame for section {section}"))?,
-        );
+        frames.push(read.get_object_section_frame(object, section)?);
     }
     let last_frame = read.get_object_layer_frame(object)?;
     frames.push(last_frame.end + 1);

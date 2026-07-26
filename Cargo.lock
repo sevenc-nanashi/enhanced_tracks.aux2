@@ -141,8 +141,9 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "aviutl2"
-version = "0.39.0"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#6a66bb7c3f49bb695a8ef4ff984619ca0680d5ba"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fafdc595bfcdc7eac8fa243325ae375ec531ee264562e97091f8cb30ed4dd232"
 dependencies = [
  "anyhow",
  "aviutl2-alias",
@@ -173,8 +174,9 @@ dependencies = [
 
 [[package]]
 name = "aviutl2-alias"
-version = "0.39.0"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#6a66bb7c3f49bb695a8ef4ff984619ca0680d5ba"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ba7fd085e6be839f7baf2ff5acc00a94c08c0e4d57f511888fea74522da95c7"
 dependencies = [
  "duplicate",
  "indexmap",
@@ -183,8 +185,9 @@ dependencies = [
 
 [[package]]
 name = "aviutl2-eframe"
-version = "0.39.0"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#6a66bb7c3f49bb695a8ef4ff984619ca0680d5ba"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "321bdc8de40fcc05735ed7b9800216c486b1de88ef7cd3e8e86d00391d11f2ae"
 dependencies = [
  "anyhow",
  "aviutl2",
@@ -196,8 +199,9 @@ dependencies = [
 
 [[package]]
 name = "aviutl2-macros"
-version = "0.39.0"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#6a66bb7c3f49bb695a8ef4ff984619ca0680d5ba"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "179f493d57ac3fb696701412e71c3259c86830b9efe7458a56f17d7de6222713"
 dependencies = [
  "decimal-rs",
  "either",
@@ -210,8 +214,9 @@ dependencies = [
 
 [[package]]
 name = "aviutl2-sys"
-version = "0.39.0"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#6a66bb7c3f49bb695a8ef4ff984619ca0680d5ba"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c1776f25ba32ffa3d9f039286c42c851265c52667b0abb0e84105eedc104213"
 dependencies = [
  "windows-sys 0.61.2",
 ]
@@ -4356,3 +4361,13 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core",
 ]
+
+[[patch.unused]]
+name = "aviutl2"
+version = "0.39.0"
+source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#6a66bb7c3f49bb695a8ef4ff984619ca0680d5ba"
+
+[[patch.unused]]
+name = "aviutl2-eframe"
+version = "0.39.0"
+source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#6a66bb7c3f49bb695a8ef4ff984619ca0680d5ba"

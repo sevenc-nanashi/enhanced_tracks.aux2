@@ -8,8 +8,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0.102"
-aviutl2 = { version = "0.39.0", features = ["serde"] }
-aviutl2-eframe = "0.39.0"
+aviutl2 = { version = "0.41.0", features = ["serde"] }
+aviutl2-eframe = "0.41.0"
 dashmap = "6.2.1"
 egui_extras = { version = "0.35.0", features = ["svg"] }
 encoding_rs = "0.8.35"

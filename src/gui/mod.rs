@@ -607,12 +607,7 @@ impl KeyframesGui {
             let section_num = read.get_object_section_num(selected_object)?;
             let mut frames = Vec::new();
             for section in 0..section_num {
-                frames.push(
-                    read.get_object_section_frame(selected_object, section)?
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("Failed to get frame for section {section}")
-                        })?,
-                );
+                frames.push(read.get_object_section_frame(selected_object, section)?);
             }
             let last_frame = read.get_object_layer_frame(selected_object)?;
             frames.push(last_frame.end + 1);
