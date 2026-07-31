@@ -87,7 +87,7 @@ impl KeyframesGui {
         object: &SelectedObjectInfo,
         effect: &EffectInfo,
     ) {
-        egui::containers::CollapsingHeader::new(if effect.is_output {
+        let effect_display = if effect.is_output {
             match effect.effect_type {
                 EffectType::VideoInput | EffectType::VideoEffect | EffectType::VideoFilter => {
                     format!(
@@ -107,17 +107,61 @@ impl KeyframesGui {
             }
         } else {
             crate::utils::get_translated_effect_name(&effect.name)
-        })
-        .id_salt(effect.handle)
-        .enabled(!effect.keyframe_tracks.is_empty())
-        .open(effect.keyframe_tracks.is_empty().then_some(false))
-        .show(ui, |ui| {
-            for track in effect.keyframe_tracks.values() {
-                ui.push_id(&track.names, |ui| {
-                    self.render_keyframe_track_info(ui, info, object, effect, &track.params, track);
-                });
+        };
+        let id = ui.id().with(effect.handle);
+        ui.scope(|ui| {
+            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                ui.ctx(),
+                id,
+                false,
+            );
+            if effect.keyframe_tracks.is_empty() {
+                ui.disable();
+                state.set_open(false);
             }
+            // NOTE: CollapsingHeaderの当たり判定を右に伸ばしたいので直接CollapsingStateを使う
+            // CollapsingHeader::show_headerの中ではCollapsingStateを使えないので、data経由で
+            // クリック判定を投げ渡す
+            let header_id = id.with("header_clicked");
+            if ui.data(|d| d.get_temp::<bool>(header_id).unwrap_or(false)) {
+                ui.data_mut(|d| d.remove::<bool>(header_id));
+                state.toggle(&ui);
+            }
+            let header = state.show_header(ui, |ui| {
+                let response = ui
+                    .horizontal(|ui| {
+                        ui.add(egui::Label::new(effect_display).selectable(false));
+                        ui.add(egui::Separator::default().horizontal())
+                    })
+                    .response;
+                if ui
+                    .interact(response.rect, id.with("header"), egui::Sense::click())
+                    .clicked()
+                {
+                    ui.data_mut(|d| d.insert_temp::<bool>(header_id, true));
+                }
+            });
+            header.body(|ui| {
+                for track in effect.keyframe_tracks.values() {
+                    ui.push_id(&track.names, |ui| {
+                        self.render_keyframe_track_info(
+                            ui,
+                            info,
+                            object,
+                            effect,
+                            &track.params,
+                            track,
+                        );
+                    });
+                }
+            });
         });
+        // egui::containers::CollapsingHeader::new(effect_display)
+        //     .id_salt(effect.handle)
+        //     .enabled(!effect.keyframe_tracks.is_empty())
+        //     .open(effect.keyframe_tracks.is_empty().then_some(false))
+        //     .show(ui, |ui| {
+        //     });
     }
 
     fn detach_keyframe_track(

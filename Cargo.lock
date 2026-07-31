@@ -4361,13 +4361,3 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core",
 ]
-
-[[patch.unused]]
-name = "aviutl2"
-version = "0.39.0"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#6a66bb7c3f49bb695a8ef4ff984619ca0680d5ba"
-
-[[patch.unused]]
-name = "aviutl2-eframe"
-version = "0.39.0"
-source = "git+https://github.com/sevenc-nanashi/aviutl2-rs#6a66bb7c3f49bb695a8ef4ff984619ca0680d5ba"
