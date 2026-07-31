@@ -1,5 +1,8 @@
 use super::*;
 
+static PRESET_PANEL_WIDTH_ID: std::sync::LazyLock<egui::Id> =
+    std::sync::LazyLock::new(|| egui::Id::new("timecontrol_preset_panel_width"));
+
 impl KeyframesGui {
     pub fn update_track_keyframes_by_target(
         target: &TimeControlEditorTarget,
@@ -114,7 +117,10 @@ impl KeyframesGui {
         let content_height = content_size.y;
         let separator_width = 8.0;
         if !target.preset_panel_width.is_finite() {
-            target.preset_panel_width = (total_width - content_height - separator_width).max(0.0);
+            target.preset_panel_width = ui
+                .data_mut(|data| data.get_persisted::<f32>(*PRESET_PANEL_WIDTH_ID))
+                .unwrap_or_else(|| (total_width - content_height - separator_width).max(0.0));
+            assert!(target.preset_panel_width.is_finite());
         }
         target.preset_panel_width = target
             .preset_panel_width
@@ -168,6 +174,9 @@ impl KeyframesGui {
             target.preset_panel_width = (target.preset_panel_width
                 - separator_response.drag_delta().x)
                 .clamp(0.0, (total_width - separator_width).max(0.0));
+            ui.data_mut(|data| {
+                data.insert_persisted(*PRESET_PANEL_WIDTH_ID, target.preset_panel_width);
+            });
         }
 
         if preset_width > 1.0 {
