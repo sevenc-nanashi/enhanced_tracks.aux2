@@ -119,28 +119,21 @@ impl KeyframesGui {
                 ui.disable();
                 state.set_open(false);
             }
-            // NOTE: CollapsingHeaderの当たり判定を右に伸ばしたいので直接CollapsingStateを使う
-            // CollapsingHeader::show_headerの中ではCollapsingStateを使えないので、data経由で
-            // クリック判定を投げ渡す
-            let header_id = id.with("header_clicked");
-            if ui.data(|d| d.get_temp::<bool>(header_id).unwrap_or(false)) {
-                ui.data_mut(|d| d.remove::<bool>(header_id));
-                state.toggle(&ui);
-            }
-            let header = state.show_header(ui, |ui| {
+            let mut toggled = false;
+            let mut header = state.show_header(ui, |ui| {
                 let response = ui
                     .horizontal(|ui| {
                         ui.add(egui::Label::new(effect_display).selectable(false));
                         ui.add(egui::Separator::default().horizontal())
                     })
                     .response;
-                if ui
-                    .interact(response.rect, id.with("header"), egui::Sense::click())
-                    .clicked()
-                {
-                    ui.data_mut(|d| d.insert_temp::<bool>(header_id, true));
+                if response.interact(egui::Sense::click()).clicked() {
+                    toggled = true;
                 }
             });
+            if toggled {
+                header.toggle();
+            }
             header.body(|ui| {
                 for track in effect.keyframe_tracks.values() {
                     ui.push_id(&track.names, |ui| {
