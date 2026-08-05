@@ -101,14 +101,17 @@ impl KeyframesGui {
                         .button(aviutl2::config::translate("中継点追加"))
                         .clicked()
                     {
-                        *selected_point = Self::insert_timecontrol_point(
+                        let new_point = Self::insert_timecontrol_point(
                             timecontrol,
                             context_menu_position
                                 .unwrap_or_else(|| viewport.screen_to_graph(handle_pos)),
                         );
-                        changed = true;
-                        commit_requested = true;
-                        structure_changed = true;
+                        if let Some(new_point) = new_point {
+                            *selected_point = new_point;
+                            changed = true;
+                            commit_requested = true;
+                            structure_changed = true;
+                        }
                         ui.close();
                     }
                     ui.separator();
@@ -642,8 +645,11 @@ impl KeyframesGui {
             )
             .clicked()
         {
-            *selected_point = Self::insert_timecontrol_point(timecontrol, add_point_position);
-            changed = true;
+            if let Some(new_point) = Self::insert_timecontrol_point(timecontrol, add_point_position)
+            {
+                *selected_point = new_point;
+                changed = true;
+            }
             ui.close();
         }
 
@@ -673,26 +679,32 @@ impl KeyframesGui {
     pub fn insert_timecontrol_point(
         timecontrol: &mut crate::keyframe::TimeControl,
         position: [f64; 2],
-    ) -> usize {
+    ) -> Option<usize> {
         let x = position[0].clamp(0.0, 1.0);
+        if timecontrol
+            .points
+            .iter()
+            .any(|point| (point.position[0] - x).abs() < Self::TIMECONTROL_MIN_ANCHOR_DISTANCE)
+        {
+            return None;
+        }
         let after_index = timecontrol
             .points
             .windows(2)
             .position(|points| x <= points[1].position[0])
             .unwrap_or(timecontrol.points.len().saturating_sub(2));
+        let min_x =
+            timecontrol.points[after_index].position[0] + Self::TIMECONTROL_MIN_ANCHOR_DISTANCE;
+        let max_x =
+            timecontrol.points[after_index + 1].position[0] - Self::TIMECONTROL_MIN_ANCHOR_DISTANCE;
+        if min_x > max_x {
+            return None;
+        }
         let new_index = timecontrol.insert_midpoint(after_index);
-        timecontrol.points[new_index].position = [
-            x.clamp(
-                timecontrol.points[new_index - 1].position[0]
-                    + Self::TIMECONTROL_MIN_ANCHOR_DISTANCE,
-                timecontrol.points[new_index + 1].position[0]
-                    - Self::TIMECONTROL_MIN_ANCHOR_DISTANCE,
-            ),
-            position[1],
-        ];
+        timecontrol.points[new_index].position = [x.clamp(min_x, max_x), position[1]];
         Self::reset_timecontrol_handles(timecontrol, new_index);
         Self::constrain_all_timecontrol_handles(timecontrol);
-        new_index
+        Some(new_index)
     }
 
     pub fn remove_timecontrol_point(
@@ -1178,5 +1190,25 @@ impl KeyframesGui {
                 _ => anyhow::bail!("Target keyframe is not easing"),
             };
         Ok(target)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::KeyframesGui;
+
+    #[test]
+    fn inserting_timecontrol_point_rejects_same_x_position() {
+        let mut timecontrol = crate::keyframe::TimeControl::default();
+
+        assert_eq!(
+            KeyframesGui::insert_timecontrol_point(&mut timecontrol, [0.5, 0.5]),
+            Some(1)
+        );
+        assert_eq!(
+            KeyframesGui::insert_timecontrol_point(&mut timecontrol, [0.5, 0.5]),
+            None
+        );
+        assert_eq!(timecontrol.points.len(), 3);
     }
 }

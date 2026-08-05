@@ -157,12 +157,15 @@ impl KeyframesGui {
                 )
                 .clicked()
             {
-                *selected_point = Self::insert_timecontrol_point(
+                let new_point = Self::insert_timecontrol_point(
                     timecontrol,
                     context_menu_position.unwrap_or([0.5, 0.5]),
                 );
-                changed = true;
-                commit_requested = true;
+                if let Some(new_point) = new_point {
+                    *selected_point = new_point;
+                    changed = true;
+                    commit_requested = true;
+                }
                 ui.close();
             }
         });
@@ -172,9 +175,11 @@ impl KeyframesGui {
             && let Some(position) =
                 Self::timecontrol_curve_position_near_pointer(timecontrol, viewport, pointer_pos)
         {
-            *selected_point = Self::insert_timecontrol_point(timecontrol, position);
-            changed = true;
-            commit_requested = true;
+            if let Some(new_point) = Self::insert_timecontrol_point(timecontrol, position) {
+                *selected_point = new_point;
+                changed = true;
+                commit_requested = true;
+            }
         }
 
         Self::draw_timecontrol_grid(&painter, response.rect, viewport);
@@ -314,11 +319,29 @@ impl KeyframesGui {
             pointer_position
         };
         if let Some(add_point_position) = add_point_position
-            && ui.input_mut(|input| input.consume_shortcut(&ADD_POINT_SHORTCUT))
+            && ui.input_mut(|input| {
+                let is_initial_press = input.events.iter().any(|event| {
+                    matches!(
+                        event,
+                        egui::Event::Key {
+                            key,
+                            pressed: true,
+                            repeat: false,
+                            modifiers,
+                            ..
+                        } if *key == ADD_POINT_SHORTCUT.logical_key
+                            && modifiers.matches_logically(ADD_POINT_SHORTCUT.modifiers)
+                    )
+                });
+                input.consume_shortcut(&ADD_POINT_SHORTCUT) && is_initial_press
+            })
         {
-            *selected_point = Self::insert_timecontrol_point(timecontrol, add_point_position);
-            egui::Popup::close_all(ui.ctx());
-            return (true, true);
+            if let Some(new_point) = Self::insert_timecontrol_point(timecontrol, add_point_position)
+            {
+                *selected_point = new_point;
+                egui::Popup::close_all(ui.ctx());
+                return (true, true);
+            }
         }
 
         let can_change_segment = *selected_point + 1 < timecontrol.points.len();
