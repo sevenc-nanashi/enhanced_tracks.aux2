@@ -71,7 +71,7 @@ impl KeyframesGui {
                 self.debug_view = true;
             }
         }
-        if let Some(info) = self.edit_info {
+        if let Some(info) = self.edit_info.as_ref().map(|info| info.clone()) {
             ui.push_id(selected_object_info.handle, |ui| {
                 for effect in &selected_object_info.effects {
                     self.render_effect_info(ui, &info, &selected_object_info, effect);
