@@ -364,7 +364,7 @@ fn apply_bindings_change(
                     binding.effect,
                     &binding.track_name,
                 );
-                if let Some(previous_params) = previous_params && previous_params.bank_id != 0 {
+                if let Some((previous_params, _)) = previous_params && previous_params.bank_id != 0 {
                     resolved_migrations.insert(previous_params);
                 }
                 new_params.set_params(edit, binding.effect, &binding.track_name)?;
@@ -398,7 +398,7 @@ fn collect_object_keyframe_bindings(
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }
-            let Some(params) = crate::KeyframeTrackParams::parse(read, effect.handle, &item.name)
+            let Some((params, saved_keyframes)) = crate::KeyframeTrackParams::parse(read, effect.handle, &item.name)
             else {
                 tracing::debug!(
                     "Effect item {:?} of effect {:?} ({:?}) in object {:?} is not a keyframe track, skipping",
@@ -409,6 +409,11 @@ fn collect_object_keyframe_bindings(
                 );
                 return;
             };
+            if params.is_initialized()
+                && let Some(keyframes) = saved_keyframes
+            {
+                crate::KEYFRAMES.entry(params).or_insert(keyframes);
+            }
             bindings
                 .entry(params)
                 .or_default()

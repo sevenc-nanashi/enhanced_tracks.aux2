@@ -1198,7 +1198,7 @@ impl KeyframesGui {
             current_target.effect,
             &current_target.track_names[0],
         ) {
-            Some(params) => params,
+            Some((params, _)) => params,
             None => {
                 tracing::error!(
                     "Failed to parse keyframe track params for time control editor, closing editor"

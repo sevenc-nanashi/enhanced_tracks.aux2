@@ -52,7 +52,7 @@ fn print_binding() -> anyhow::Result<()> {
                         if item.item_type != aviutl2::generic::EffectItemType::Number {
                             return;
                         }
-                        let Some(params) =
+                        let Some((params, _)) =
                             crate::KeyframeTrackParams::parse(read, effect.handle, &item.name)
                         else {
                             return;

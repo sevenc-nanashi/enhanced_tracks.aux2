@@ -526,7 +526,7 @@ impl KeyframesGui {
                 if item.item_type != aviutl2::generic::EffectItemType::Number {
                     return;
                 }
-                if let Some(params) =
+                if let Some((params, _)) =
                     crate::KeyframeTrackParams::parse(read, effect.handle, &item.name)
                 {
                     // let keyframe_info = KeyframeTrackInfo {

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{io::Read, str::FromStr};
 
 use anyhow::Context;
 
@@ -120,30 +120,129 @@ pub struct KeyframeBinding {
     pub track_name: String,
 }
 
+fn serialize_keyframes_to_time_control_points(
+    keyframes: &crate::keyframe::Keyframes,
+) -> anyhow::Result<Vec<aviutl2_track_parser::TimeControlPoint>> {
+    let mut bytes = rmp_serde::to_vec(keyframes).context("Failed to serialize keyframes")?;
+    let compressed = zstd::bulk::compress(&bytes, 0).context("Failed to compress keyframes")?;
+    if compressed.len() < bytes.len() {
+        tracing::debug!(
+            "Compressed keyframes from {} bytes to {} bytes",
+            bytes.len(),
+            compressed.len()
+        );
+        bytes = compressed;
+    } else {
+        tracing::debug!(
+            "Not compressing keyframes: compressed size {} is not smaller than original size {}",
+            compressed.len(),
+            bytes.len()
+        );
+    }
+    bytes.resize(bytes.len().next_multiple_of(2), 0);
+    let chunks = bytes.as_chunks::<2>().0;
+
+    Ok(chunks
+        .iter()
+        .enumerate()
+        .map(|(index, chunk)| {
+            let position = index as f64 / (chunks.len() - 1) as f64;
+            aviutl2_track_parser::TimeControlPoint {
+                coordinate: (position, position),
+                handle_offset: (u16::from_le_bytes(*chunk) as f64, 0.0),
+            }
+        })
+        .collect())
+}
+
+fn parse_keyframes_from_time_control_points(
+    points: &[aviutl2_track_parser::TimeControlPoint],
+) -> anyhow::Result<crate::keyframe::Keyframes> {
+    let mut bytes = vec![];
+    for point in points {
+        let right_coord = point.handle_offset.0;
+        if right_coord % 1.0 != 0.0 || !(0.0..=u16::MAX as f64).contains(&right_coord) {
+            anyhow::bail!(
+                "Keyframe track has invalid right handle offset: {}",
+                right_coord
+            );
+        }
+        let chunk = right_coord as u16;
+        bytes.extend_from_slice(&chunk.to_le_bytes());
+    }
+
+    if bytes.starts_with(&zstd::zstd_safe::zstd_sys::ZSTD_MAGICNUMBER.to_le_bytes()) {
+        // 2バイト単位に揃えるための末尾の0を次のフレームとして扱わない。
+        let mut decoder = zstd::stream::read::Decoder::new(bytes.as_slice())
+            .context("Failed to create keyframes decoder")?
+            .single_frame();
+        let mut decompressed = Vec::new();
+        decoder
+            .read_to_end(&mut decompressed)
+            .context("Failed to decompress keyframes")?;
+        bytes = decompressed;
+    }
+
+    let loaded = rmp_serde::from_slice::<crate::keyframe::Keyframes>(&bytes)
+        .context("Failed to deserialize keyframes from time control points")?;
+    Ok(loaded)
+}
+
 impl KeyframeTrackParams {
     pub fn parse(
         read: &aviutl2::generic::ReadSection,
         effect: aviutl2::generic::EffectHandle,
         track_name: &str,
-    ) -> Option<Self> {
+    ) -> Option<(Self, Option<crate::keyframe::Keyframes>)> {
         let info = read.effect(effect).get_track_info(track_name).ok()?;
-        if info.mode.is_none_or(|m| m != "enhanced_tracks.aux2") {
+        if info
+            .mode
+            .as_ref()
+            .is_none_or(|m| m != "enhanced_tracks.aux2")
+        {
             return None;
         }
+        let track_info = read.effect(effect).get_item_value(track_name).ok()?;
+        let track_info = aviutl2_track_parser::Track::parse(&track_info, &info).ok()?;
+        let movement = track_info.movement.as_ref()?;
 
-        if info.params.len() != 4 {
+        if movement.parameters.len() != 4 {
             return None;
         }
-        let bank_id: usize = info.params[0] as usize;
-        let keyframes_id: usize = info.params[1] as usize;
-        let scene_id: i32 = info.params[2] as i32;
-        let project_session_nonce: usize = info.params[3] as usize;
-        Some(Self {
-            bank_id,
-            keyframes_id,
-            scene_id,
-            project_session_nonce,
-        })
+        let bank_id: usize = movement.parameters[0] as usize;
+        let keyframes_id: usize = movement.parameters[1] as usize;
+        let scene_id: i32 = movement.parameters[2] as i32;
+        let project_session_nonce: usize = movement.parameters[3] as usize;
+        let saved_keyframes = if let Some(points) =
+            track_info.time_control_points.as_ref().filter(|points| {
+                points
+                    .iter()
+                    .any(|point| point.handle_offset != (0.25, 0.25))
+            }) {
+            match parse_keyframes_from_time_control_points(points) {
+                Ok(keyframes) => Some(keyframes),
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to parse keyframes from time control points for track {}: {:?}",
+                        track_name,
+                        e
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        Some((
+            Self {
+                bank_id,
+                keyframes_id,
+                scene_id,
+                project_session_nonce,
+            },
+            saved_keyframes,
+        ))
     }
     pub fn set_params(
         &self,
@@ -174,6 +273,12 @@ impl KeyframeTrackParams {
                 self.project_session_nonce as f64,
             ],
         });
+        track_info.time_control_points = Some(serialize_keyframes_to_time_control_points(
+            KEYFRAMES
+                .get(self)
+                .context("Failed to get keyframes to serialize")?
+                .value(),
+        )?);
         effect.set_item_value(track_name, &track_info.to_string())?;
         Ok(())
     }
@@ -564,7 +669,8 @@ fn collect_used_keyframes(
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }
-            let Some(params) = crate::KeyframeTrackParams::parse(edit, effect, &item.name) else {
+            let Some((params, _)) = crate::KeyframeTrackParams::parse(edit, effect, &item.name)
+            else {
                 return;
             };
             used_keyframes.insert(params);
@@ -578,6 +684,128 @@ aviutl2::register_generic_plugin!(KeyframesAux2);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyframes_round_trip_through_track_time_control_points() {
+        use crate::keyframe::{
+            EasingKeyframeInfo, Keyframe, Keyframes, TimeControl, TimeControlMode,
+        };
+
+        let info = aviutl2::generic::TrackInfo {
+            mode: Some("enhanced_tracks.aux2".to_string()),
+            params: vec![1.0, 2.0, 0.0, 3.0],
+            accelerate: false,
+            decelerate: false,
+            twopoint: false,
+            timecontrol: true,
+            group_num: 1,
+            group_index: 0,
+            group_name: None,
+        };
+        let mut parities = [false; 2];
+        for mode in [
+            TimeControlMode::Bezier,
+            TimeControlMode::Elastic,
+            TimeControlMode::Bounce,
+        ] {
+            for name in ["テスト", "テスト!"] {
+                let keyframes = Keyframes {
+                    keyframes: vec![
+                        Keyframe::Easing(EasingKeyframeInfo {
+                            easing: name.to_string(),
+                            acceleration: true,
+                            deceleration: true,
+                            params: vec![-2.5, 0.0, 65535.125],
+                            timecontrol: TimeControl::default_for_mode(mode),
+                        }),
+                        Keyframe::Ignored,
+                        Keyframe::Midpoint,
+                    ],
+                };
+                let bytes = rmp_serde::to_vec(&keyframes).unwrap();
+                let compressed = zstd::bulk::compress(&bytes, 0).unwrap();
+                let stored_len = compressed.len().min(bytes.len());
+                parities[stored_len % 2] = true;
+                let points = serialize_keyframes_to_time_control_points(&keyframes).unwrap();
+                assert_eq!(points.len(), stored_len.div_ceil(2));
+                assert_eq!(points.first().unwrap().coordinate, (0.0, 0.0));
+                assert_eq!(points.last().unwrap().coordinate, (1.0, 1.0));
+                let track = aviutl2_track_parser::Track {
+                    values: vec![0.0, 100.0],
+                    precision: 2,
+                    flag: aviutl2_track_parser::TrackFlag::REFERENCE,
+                    movement: Some(aviutl2_track_parser::Movement {
+                        name: info.mode.clone().unwrap(),
+                        parameters: info.params.clone(),
+                    }),
+                    time_control_points: Some(points),
+                    reference: Some("this.X".to_string()),
+                };
+                let parsed = aviutl2_track_parser::Track::parse(&track.to_string(), &info).unwrap();
+                let restored = parse_keyframes_from_time_control_points(
+                    parsed.time_control_points.as_ref().unwrap(),
+                )
+                .unwrap();
+                assert_eq!(rmp_serde::to_vec(&restored).unwrap(), bytes);
+            }
+        }
+        assert_eq!(parities, [true, true]);
+    }
+
+    #[test]
+    fn track_compression_keeps_the_smaller_payload_and_reads_uncompressed_data() {
+        for (keyframes, should_compress) in [
+            (
+                crate::keyframe::Keyframes {
+                    keyframes: vec![crate::keyframe::Keyframe::Midpoint; 2],
+                },
+                false,
+            ),
+            (crate::keyframe::Keyframes::new(128), true),
+        ] {
+            let bytes = rmp_serde::to_vec(&keyframes).unwrap();
+            let compressed = zstd::bulk::compress(&bytes, 0).unwrap();
+            assert_eq!(compressed.len() < bytes.len(), should_compress);
+            let points = serialize_keyframes_to_time_control_points(&keyframes).unwrap();
+            let stored: Vec<_> = points
+                .iter()
+                .flat_map(|point| (point.handle_offset.0 as u16).to_le_bytes())
+                .collect();
+            let expected = if should_compress { &compressed } else { &bytes };
+            assert_eq!(&stored[..expected.len()], expected);
+            assert_eq!(stored.len(), expected.len().next_multiple_of(2));
+            let restored = parse_keyframes_from_time_control_points(&points).unwrap();
+            assert_eq!(rmp_serde::to_vec(&restored).unwrap(), bytes);
+
+            let mut uncompressed = bytes.clone();
+            uncompressed.resize(uncompressed.len().next_multiple_of(2), 0);
+            let points: Vec<_> = uncompressed
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|chunk| aviutl2_track_parser::TimeControlPoint {
+                    coordinate: (0.0, 0.0),
+                    handle_offset: (u16::from_le_bytes(*chunk) as f64, 0.0),
+                })
+                .collect();
+            let restored = parse_keyframes_from_time_control_points(&points).unwrap();
+            assert_eq!(rmp_serde::to_vec(&restored).unwrap(), bytes);
+        }
+    }
+
+    #[test]
+    fn invalid_time_control_payload_is_rejected() {
+        let mut points =
+            serialize_keyframes_to_time_control_points(&crate::keyframe::Keyframes::new(2))
+                .unwrap();
+        assert!(parse_keyframes_from_time_control_points(&points[..points.len() - 1]).is_err());
+        for value in [-1.0, 0.5, 65536.0, f64::NAN, f64::INFINITY] {
+            points.last_mut().unwrap().handle_offset.0 = value;
+            assert!(parse_keyframes_from_time_control_points(&points).is_err());
+        }
+        assert!(parse_keyframes_from_time_control_points(&[]).is_err());
+        assert!(parse_keyframes_from_time_control_points(&points[..1]).is_err());
+    }
 
     #[test]
     fn movement_label_overrides_script_label() {
