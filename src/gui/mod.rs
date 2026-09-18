@@ -535,7 +535,7 @@ impl KeyframesGui {
                     // };
                     // effect_info.keyframe_tracks.push(keyframe_info);
                     match read.get_effect_track_info(effect.handle, &item.name) {
-                        Ok(Some(track_info)) => {
+                        Ok(track_info) => {
                             effect_info
                                 .keyframe_tracks
                                 .entry(
@@ -549,13 +549,6 @@ impl KeyframesGui {
                                 })
                                 .names
                                 .push(item.name.to_string());
-                        }
-                        Ok(None) => {
-                            tracing::warn!(
-                                "Failed to get track info for effect {} item {}: track info is None",
-                                effect_name,
-                                item.name
-                            );
                         }
                         Err(e) => {
                             tracing::error!(

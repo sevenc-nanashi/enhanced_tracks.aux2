@@ -177,9 +177,8 @@ impl KeyframesGui {
                 new_params.set_params(edit, effect.handle, name)?;
 
                 // グループ化解除
-                if let Some(group_name) = edit
-                    .get_effect_track_info(effect.handle, name)?
-                    .and_then(|t| t.group_name)
+                if let Some(group_name) =
+                    edit.get_effect_track_info(effect.handle, name)?.group_name
                 {
                     edit.set_effect_item_value(effect.handle, &group_name, "0")?;
                 }

@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use anyhow::Context;
-use lazy_regex::regex;
 
 mod gui;
 mod keyframe;
@@ -127,8 +126,8 @@ impl KeyframeTrackParams {
         effect: aviutl2::generic::EffectHandle,
         track_name: &str,
     ) -> Option<Self> {
-        let info = read.effect(effect).get_track_info(track_name).ok()??;
-        if info.mode != "enhanced_tracks.aux2" {
+        let info = read.effect(effect).get_track_info(track_name).ok()?;
+        if info.mode.is_none_or(|m| m != "enhanced_tracks.aux2") {
             return None;
         }
 
@@ -162,88 +161,20 @@ impl KeyframeTrackParams {
             current_params
         );
         let current_track = effect.get_item_value(track_name)?;
-        let track_alias_param = format!(
-            "{},{},{},{}",
-            self.bank_id, self.keyframes_id, self.scene_id, self.project_session_nonce
-        );
-        let new_track = match current_params {
-            None => {
-                if let Some((not_expr, expr)) = current_track.split_once('|')
-                    && let Some((value, _flags)) = not_expr.split_once(',')
-                {
-                    format!("{value},{value},enhanced_tracks.aux2,8|{track_alias_param}|{expr}",)
-                } else {
-                    format!("{current_track},enhanced_tracks.aux2,0|{track_alias_param}")
-                }
-            }
-            Some(track) => {
-                let has_expression = {
-                    let (left, _right) = current_track.split_once('|').ok_or_else(|| {
-                        anyhow::anyhow!("Unexpected track format: {current_track:?}")
-                    })?;
-                    let flags = left
-                        .split(",")
-                        .last()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("Unexpected track format: {current_track:?}")
-                        })?
-                        .parse::<u32>()
-                        .map_err(|e| {
-                            anyhow::anyhow!(
-                                "Failed to parse flags from track: {current_track:?}, error: {e}"
-                            )
-                        })?;
-                    flags & 8 != 0
-                };
-                let mut pattern = "^".to_string();
-                pattern.push_str("(?<values>[-0-9\\.]+(?:,[-0-9\\.]+)*)");
-                pattern.push(',');
-                pattern.push_str(&regex::escape(&track.mode));
-                pattern.push_str(",[-0-9]+");
-                if !track.params.is_empty() {
-                    pattern.push_str("\\|");
-                    for i in 0..track.params.len() {
-                        if i != 0 {
-                            pattern.push(',');
-                        }
-                        pattern.push_str("[-0-9\\.]+");
-                    }
-                }
-                if track.timecontrol {
-                    pattern.push_str("\\|");
-                    pattern.push_str("[^|]*");
-                }
-                if has_expression {
-                    pattern.push_str("\\|");
-                    pattern.push_str("(?<expr>.*)");
-                }
-
-                let pattern = regex::Regex::new(&pattern).map_err(|e| {
-                    anyhow::anyhow!("Failed to compile regex pattern: {pattern:?}, error: {e}")
-                })?;
-                let Some(captures) = pattern.captures(&current_track) else {
-                    return Err(anyhow::anyhow!(
-                        "Failed to match current track with pattern: {pattern:?}, current track: {current_track:?}"
-                    ));
-                };
-                let values = captures
-                    .name("values")
-                    .ok_or_else(|| anyhow::anyhow!("Failed to retrieve `values`"))?
-                    .as_str();
-                let expr = captures.name("expr").map(|m| m.as_str());
-                if has_expression {
-                    format!(
-                        "{values},enhanced_tracks.aux2,8|{track_alias_param}|{expr}",
-                        expr = expr.unwrap_or("")
-                    )
-                } else {
-                    format!("{values},enhanced_tracks.aux2,0|{track_alias_param}")
-                }
-            }
-        };
-        effect
-            .set_item_value(track_name, &new_track)
-            .context("Failed to set new track")?;
+        let track_info = effect
+            .get_track_info(track_name)
+            .context("Failed to get track info")?;
+        let mut track_info = aviutl2_track_parser::Track::parse(&current_track, &track_info)?;
+        track_info.movement = Some(aviutl2_track_parser::Movement {
+            name: "enhanced_tracks.aux2".to_string(),
+            parameters: vec![
+                self.bank_id as f64,
+                self.keyframes_id as f64,
+                self.scene_id as f64,
+                self.project_session_nonce as f64,
+            ],
+        });
+        effect.set_item_value(track_name, &track_info.to_string())?;
         Ok(())
     }
 }
@@ -259,10 +190,6 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
             .event_format(aviutl2::logger::AviUtl2Formatter)
             .with_writer(aviutl2::logger::AviUtl2LogWriter)
             .init();
-        aviutl2::lprintln!(
-            "Config initialized?: {:?}",
-            aviutl2::config::app_data_path()
-        );
         Ok(Self {
             mod2: aviutl2::generic::SubPlugin::new_script_module(&info)?,
             watcher: watcher::WatcherThread::start(),
