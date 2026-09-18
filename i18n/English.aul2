@@ -21,6 +21,7 @@ Undoを妨げないために同期を中断しています。クリックで再�
 コピー=Copy
 貼り付け=Paste
 中継点追加=Add Point
+自動スクロール=Auto Scroll
 中継点削除=Remove Point
 区間方式=Segment Mode
 ベジェ=Bezier

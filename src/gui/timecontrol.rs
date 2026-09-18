@@ -12,6 +12,9 @@ mod types;
 
 pub use types::*;
 
+pub(super) static TIMECONTROL_AUTO_SCROLL_ID: std::sync::LazyLock<egui::Id> =
+    std::sync::LazyLock::new(|| egui::Id::new("timecontrol_auto_scroll"));
+
 // TODO: ショートカットキーを変更できるようにする
 static COPY_SHORTCUT: egui::KeyboardShortcut =
     egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::C);

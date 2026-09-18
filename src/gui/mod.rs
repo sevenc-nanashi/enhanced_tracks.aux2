@@ -16,6 +16,7 @@ pub struct KeyframesGui {
     pub selected_object_info: Option<SelectedObjectInfo>,
     pub timecontrol_editor: Option<TimeControlEditorTarget>,
     pub timecontrol_clipboard: Option<crate::keyframe::TimeControl>,
+    pub timecontrol_auto_scroll: bool,
     pub easing_search_text: String,
     pub keyframe_timeline_view: KeyframeTimelineView,
     pub debug_counter: usize,
@@ -92,7 +93,7 @@ pub struct TimeControlEditorTarget {
     pub dirty: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TimeControlVerticalBounds {
     pub min_y: f64,
     pub max_y: f64,
@@ -307,10 +308,15 @@ pub fn create_gui(
     });
     cc.egui_ctx.set_fonts(aviutl2_eframe::aviutl2_fonts());
     let edit_section_thread = EditSectionThread::start(cc.egui_ctx.clone())?;
+    let timecontrol_auto_scroll = cc.egui_ctx.data_mut(|data| {
+        data.get_persisted::<bool>(*timecontrol::TIMECONTROL_AUTO_SCROLL_ID)
+            .unwrap_or(true)
+    });
     Ok(Box::new(KeyframesGui {
         selected_object_info: None,
         timecontrol_editor: None,
         timecontrol_clipboard: None,
+        timecontrol_auto_scroll,
         easing_search_text: String::new(),
         keyframe_timeline_view: KeyframeTimelineView::default(),
         debug_counter: 0,

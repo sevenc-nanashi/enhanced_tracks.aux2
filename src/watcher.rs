@@ -400,6 +400,11 @@ fn collect_object_keyframe_bindings(
             }
             let Some(params) = crate::KeyframeTrackParams::parse(read, effect.handle, &item.name)
             else {
+                aviutl2::lprintln!(
+                    "Failed to parse keyframe track params for effect {:?}, track {:?}, skipping",
+                    effect.handle,
+                    item.name
+                );
                 return;
             };
             bindings

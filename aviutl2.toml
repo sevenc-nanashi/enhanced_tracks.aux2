@@ -53,7 +53,8 @@ catalog_dependencies = [
   "aviutl2-community.aviutl2_community_translation_companion",
   "Mr-Ojii.L-SMASH-Works",
   "korarei.FlowType_K",
-  "Garech.jp_akey.aul2"
+  "Garech.jp_akey.aul2",
+  "NeAc.CinemaScope"
 ]
 
 [release]

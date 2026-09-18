@@ -7,6 +7,7 @@ impl KeyframesGui {
         selected_point: &mut usize,
         context_menu_position: &mut Option<[f64; 2]>,
         clipboard: &mut Option<crate::keyframe::TimeControl>,
+        auto_scroll: &mut bool,
         visible_y_bounds: &mut Option<TimeControlVerticalBounds>,
         drag_scroll_y_bounds: &mut Option<TimeControlVerticalBounds>,
     ) -> (bool, bool) {
@@ -36,7 +37,9 @@ impl KeyframesGui {
             actual_vertical_bounds
         };
         let mut current_visible_y_bounds = visible_y_bounds
-            .unwrap_or(vertical_bounds)
+            .unwrap_or_else(|| {
+                Self::initial_timecontrol_visible_y_bounds(*auto_scroll, vertical_bounds)
+            })
             .clamp_to_content(vertical_bounds);
         let pointer_pos = ui.input(|i| i.pointer.hover_pos());
         if pointer_pos.is_some_and(|pos| response.rect.contains(pos)) {
@@ -168,6 +171,19 @@ impl KeyframesGui {
                 }
                 ui.close();
             }
+            ui.separator();
+            if ui
+                .checkbox(auto_scroll, aviutl2::config::translate("自動スクロール"))
+                .changed()
+            {
+                ui.data_mut(|data| {
+                    data.insert_persisted(*TIMECONTROL_AUTO_SCROLL_ID, *auto_scroll);
+                });
+                if *auto_scroll {
+                    *visible_y_bounds = None;
+                    *drag_scroll_y_bounds = None;
+                }
+            }
         });
         if response.double_clicked()
             && let Some(pointer_pos) = response.interact_pointer_pos()
@@ -194,6 +210,7 @@ impl KeyframesGui {
                 selected_point,
                 context_menu_position,
                 viewport,
+                *auto_scroll,
                 visible_y_bounds,
                 vertical_bounds,
             );
@@ -216,6 +233,7 @@ impl KeyframesGui {
                         segment_index,
                         selected_point,
                         viewport,
+                        *auto_scroll,
                         visible_y_bounds,
                         vertical_bounds,
                     );
@@ -232,6 +250,7 @@ impl KeyframesGui {
                     segment_index,
                     selected_point,
                     viewport,
+                    *auto_scroll,
                     visible_y_bounds,
                     vertical_bounds,
                 );
@@ -248,6 +267,7 @@ impl KeyframesGui {
                 selected_point,
                 context_menu_position,
                 viewport,
+                *auto_scroll,
                 visible_y_bounds,
                 vertical_bounds,
             );
@@ -258,6 +278,21 @@ impl KeyframesGui {
         }
 
         (changed, commit_requested)
+    }
+
+    fn initial_timecontrol_visible_y_bounds(
+        auto_scroll: bool,
+        vertical_bounds: TimeControlVerticalBounds,
+    ) -> TimeControlVerticalBounds {
+        if auto_scroll {
+            vertical_bounds
+        } else {
+            TimeControlVerticalBounds {
+                min_y: 0.0,
+                max_y: 1.0,
+            }
+            .clamp_to_content(vertical_bounds)
+        }
     }
 
     fn handle_timecontrol_editor_shortcuts(
@@ -493,5 +528,39 @@ impl KeyframesGui {
             max_y = max_y.max(position[1]);
         }
         (min_y, max_y)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_scroll_initially_fits_the_timecontrol_content() {
+        let vertical_bounds = TimeControlVerticalBounds {
+            min_y: -1.0,
+            max_y: 2.0,
+        };
+
+        assert_eq!(
+            KeyframesGui::initial_timecontrol_visible_y_bounds(true, vertical_bounds),
+            vertical_bounds
+        );
+    }
+
+    #[test]
+    fn disabled_auto_scroll_initially_uses_the_unit_range() {
+        let vertical_bounds = TimeControlVerticalBounds {
+            min_y: -1.0,
+            max_y: 2.0,
+        };
+
+        assert_eq!(
+            KeyframesGui::initial_timecontrol_visible_y_bounds(false, vertical_bounds),
+            TimeControlVerticalBounds {
+                min_y: 0.0,
+                max_y: 1.0,
+            }
+        );
     }
 }

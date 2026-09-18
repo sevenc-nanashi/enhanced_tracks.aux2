@@ -8,6 +8,7 @@ impl KeyframesGui {
         selected_point: &mut usize,
         context_menu_position: &mut Option<[f64; 2]>,
         viewport: TimeControlViewport,
+        auto_scroll: bool,
         visible_y_bounds: &mut Option<TimeControlVerticalBounds>,
         vertical_bounds: TimeControlVerticalBounds,
     ) -> (bool, bool, bool) {
@@ -82,6 +83,7 @@ impl KeyframesGui {
                         changed = true;
                     }
                     Self::scroll_timecontrol_y_for_drag(
+                        auto_scroll,
                         ui,
                         visible_y_bounds,
                         viewport,
@@ -136,6 +138,7 @@ impl KeyframesGui {
         selected_point: &mut usize,
         context_menu_position: &mut Option<[f64; 2]>,
         viewport: TimeControlViewport,
+        auto_scroll: bool,
         visible_y_bounds: &mut Option<TimeControlVerticalBounds>,
         vertical_bounds: TimeControlVerticalBounds,
     ) -> (bool, bool, bool) {
@@ -171,6 +174,7 @@ impl KeyframesGui {
                     changed = true;
                 }
                 Self::scroll_timecontrol_y_for_drag(
+                    auto_scroll,
                     ui,
                     visible_y_bounds,
                     viewport,
@@ -426,6 +430,7 @@ impl KeyframesGui {
         segment_index: usize,
         selected_point: &mut usize,
         viewport: TimeControlViewport,
+        auto_scroll: bool,
         visible_y_bounds: &mut Option<TimeControlVerticalBounds>,
         vertical_bounds: TimeControlVerticalBounds,
     ) -> (bool, bool) {
@@ -456,6 +461,7 @@ impl KeyframesGui {
                 changed = true;
             }
             Self::scroll_timecontrol_y_for_drag(
+                auto_scroll,
                 ui,
                 visible_y_bounds,
                 viewport,
@@ -479,6 +485,7 @@ impl KeyframesGui {
         segment_index: usize,
         selected_point: &mut usize,
         viewport: TimeControlViewport,
+        auto_scroll: bool,
         visible_y_bounds: &mut Option<TimeControlVerticalBounds>,
         vertical_bounds: TimeControlVerticalBounds,
     ) -> (bool, bool) {
@@ -562,6 +569,7 @@ impl KeyframesGui {
                 elastic.set_amp_handle_y(position[1]);
                 changed |= (elastic.amplitude - old_amplitude).abs() > f64::EPSILON;
                 Self::scroll_timecontrol_y_for_drag(
+                    auto_scroll,
                     ui,
                     visible_y_bounds,
                     viewport,
@@ -611,6 +619,7 @@ impl KeyframesGui {
             changed |= (elastic.frequency - old_frequency).abs() > f64::EPSILON
                 || (elastic.decay - old_decay).abs() > f64::EPSILON;
             Self::scroll_timecontrol_y_for_drag(
+                auto_scroll,
                 ui,
                 visible_y_bounds,
                 viewport,
@@ -866,14 +875,36 @@ impl KeyframesGui {
     }
 
     pub fn scroll_timecontrol_y_for_drag(
+        auto_scroll: bool,
         ui: &egui::Ui,
         visible_y_bounds: &mut Option<TimeControlVerticalBounds>,
         viewport: TimeControlViewport,
         vertical_bounds: TimeControlVerticalBounds,
         pointer_pos: egui::Pos2,
     ) {
-        if viewport.rect.height() <= f32::EPSILON {
+        let Some(new_visible_y_bounds) = Self::timecontrol_drag_scroll_bounds(
+            auto_scroll,
+            viewport,
+            vertical_bounds,
+            pointer_pos,
+        ) else {
             return;
+        };
+        *visible_y_bounds = Some(new_visible_y_bounds);
+        ui.ctx().request_repaint();
+    }
+
+    fn timecontrol_drag_scroll_bounds(
+        auto_scroll: bool,
+        viewport: TimeControlViewport,
+        vertical_bounds: TimeControlVerticalBounds,
+        pointer_pos: egui::Pos2,
+    ) -> Option<TimeControlVerticalBounds> {
+        if !auto_scroll {
+            return None;
+        }
+        if viewport.rect.height() <= f32::EPSILON {
+            return None;
         }
 
         let overflow = if pointer_pos.y < viewport.rect.top() {
@@ -881,22 +912,21 @@ impl KeyframesGui {
         } else if pointer_pos.y > viewport.rect.bottom() {
             viewport.rect.bottom() - pointer_pos.y
         } else {
-            return;
+            return None;
         };
 
         let visible_y_range = viewport.max_y - viewport.min_y;
         let scroll_y = overflow as f64 / viewport.rect.height() as f64 * visible_y_range;
         let max_scroll_y = visible_y_range * 0.025;
         let scroll_y = scroll_y.clamp(-max_scroll_y, max_scroll_y);
-        *visible_y_bounds = Some(
+        Some(
             TimeControlVerticalBounds {
                 min_y: viewport.min_y,
                 max_y: viewport.max_y,
             }
             .translate(scroll_y)
             .clamp_to_content(vertical_bounds),
-        );
-        ui.ctx().request_repaint();
+        )
     }
 
     pub fn move_timecontrol_anchor(
@@ -1195,7 +1225,9 @@ impl KeyframesGui {
 
 #[cfg(test)]
 mod tests {
-    use super::KeyframesGui;
+    use aviutl2_eframe::egui;
+
+    use super::{KeyframesGui, TimeControlVerticalBounds, TimeControlViewport};
 
     #[test]
     fn inserting_timecontrol_point_rejects_same_x_position() {
@@ -1210,5 +1242,39 @@ mod tests {
             None
         );
         assert_eq!(timecontrol.points.len(), 3);
+    }
+
+    #[test]
+    fn drag_scroll_bounds_are_only_updated_when_auto_scroll_is_enabled() {
+        let viewport = TimeControlViewport {
+            rect: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 100.0)),
+            min_y: 0.0,
+            max_y: 1.0,
+        };
+        let vertical_bounds = TimeControlVerticalBounds {
+            min_y: -1.0,
+            max_y: 2.0,
+        };
+        let pointer_pos = egui::pos2(50.0, -100.0);
+
+        assert_eq!(
+            KeyframesGui::timecontrol_drag_scroll_bounds(
+                false,
+                viewport,
+                vertical_bounds,
+                pointer_pos,
+            ),
+            None
+        );
+        let Some(scrolled_bounds) = KeyframesGui::timecontrol_drag_scroll_bounds(
+            true,
+            viewport,
+            vertical_bounds,
+            pointer_pos,
+        ) else {
+            panic!("Auto scroll must update the visible bounds");
+        };
+        assert!((scrolled_bounds.min_y - 0.025).abs() < f64::EPSILON);
+        assert!((scrolled_bounds.max_y - 1.025).abs() < f64::EPSILON);
     }
 }

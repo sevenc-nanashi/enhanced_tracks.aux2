@@ -153,6 +153,7 @@ impl KeyframesGui {
                 &mut target.selected_point,
                 &mut target.context_menu_position,
                 &mut self.timecontrol_clipboard,
+                &mut self.timecontrol_auto_scroll,
                 &mut target.visible_y_bounds,
                 &mut target.drag_scroll_y_bounds,
             );
