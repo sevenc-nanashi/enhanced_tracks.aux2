@@ -32,6 +32,7 @@ struct ResolvedScript {
 }
 
 pub fn clear_runtime_caches() {
+    crate::EFFECT_ITEMS_CACHE.clear();
     RESOLVED_KEYFRAMES_CACHE.clear();
     RESOLVED_SCRIPT_CACHE.clear();
 }

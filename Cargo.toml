@@ -7,20 +7,20 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-anyhow = "1.0.102"
-aviutl2 = { version = "0.46.1", features = ["serde"] }
-aviutl2-eframe = "0.46.1"
+anyhow = "1.0.104"
+aviutl2 = { version = "0.53.0", features = ["serde"] }
+aviutl2-eframe = "0.53.0"
 aviutl2_track_parser = { git = "https://github.com/sevenc-nanashi/aviutl2_track_parser", version = "0.1.0" }
 dashmap = "6.2.1"
 egui_extras = { version = "0.35.0", features = ["svg"] }
-encoding_rs = "0.8.35"
+encoding_rs = "0.8.44"
 iconify = "0.3.1"
 include_dir = "0.7.4"
-indexmap = "2.14.0"
-lazy-regex = "3.6.0"
+indexmap = "2.14.2"
+lazy-regex = "3.6.2"
 nucleo-matcher = "0.3.1"
-rand = "0.10.1"
-serde = { version = "1.0.228", features = ["derive"] }
+rand = "0.10.4"
+serde = { version = "1.0.229", features = ["derive"] }
 tap = "1.0.1"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"

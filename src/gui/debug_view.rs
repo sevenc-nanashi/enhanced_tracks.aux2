@@ -48,7 +48,7 @@ fn print_binding() -> anyhow::Result<()> {
                 for effect in read.get_effects(object)? {
                     let effect = read.effect(effect);
                     let effect_name = effect.get_name().context("Failed to get effect name")?;
-                    crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
+                    crate::enumerate_effect_items(&effect_name, |item| {
                         if item.item_type != aviutl2::generic::EffectItemType::Number {
                             return;
                         }

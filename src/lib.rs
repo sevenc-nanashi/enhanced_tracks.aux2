@@ -26,6 +26,9 @@ pub struct CurrentSceneUsageInfo {
 
 pub static EFFECTS: std::sync::LazyLock<dashmap::DashMap<String, aviutl2::generic::Effect>> =
     std::sync::LazyLock::new(dashmap::DashMap::new);
+static EFFECT_ITEMS_CACHE: std::sync::LazyLock<
+    dashmap::DashMap<String, std::sync::Arc<[aviutl2::generic::EffectItemInfo]>>,
+> = std::sync::LazyLock::new(dashmap::DashMap::new);
 /// NOTE: ここに存在しないイージングが設定されることもありうる！（スクリプトを抜くとそうなる）
 pub static EASINGS: std::sync::LazyLock<
     std::sync::RwLock<indexmap::IndexMap<String, crate::keyframe::Easing>>,
@@ -339,6 +342,12 @@ impl aviutl2::generic::GenericPlugin for KeyframesAux2 {
             ctx.request_repaint();
         }
     }
+
+    fn event_reload_language(&mut self) {
+        if let Some(ctx) = EGUI_CONTEXT.lock().unwrap().as_ref() {
+            ctx.request_repaint();
+        }
+    }
 }
 
 pub(crate) fn mark_unused_keyframes(
@@ -375,6 +384,26 @@ pub(crate) fn mark_unused_keyframes(
         info.scene_id,
         n_unused
     );
+}
+
+fn enumerate_effect_items(
+    effect_name: &str,
+    mut callback: impl FnMut(&aviutl2::generic::EffectItemInfo),
+) -> anyhow::Result<()> {
+    let cached = EFFECT_ITEMS_CACHE
+        .get(effect_name)
+        .map(|items| items.clone());
+    let items = if let Some(items) = cached {
+        items
+    } else {
+        let items: std::sync::Arc<[_]> = EDIT_HANDLE.get_effect_items(effect_name)?.into();
+        EFFECT_ITEMS_CACHE.insert(effect_name.to_string(), items.clone());
+        items
+    };
+    for item in items.iter() {
+        callback(item);
+    }
+    Ok(())
 }
 
 fn load_effects() -> anyhow::Result<()> {
@@ -560,7 +589,7 @@ fn collect_used_keyframes(
 ) -> anyhow::Result<()> {
     for effect in edit.get_effects(object)? {
         let effect_name = edit.get_effect_name(effect)?;
-        crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
+        crate::enumerate_effect_items(&effect_name, |item| {
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }

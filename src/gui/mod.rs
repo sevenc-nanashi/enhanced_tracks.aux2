@@ -522,7 +522,7 @@ impl KeyframesGui {
                 effect_type,
                 keyframe_tracks: indexmap::IndexMap::new(),
             };
-            crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
+            crate::enumerate_effect_items(&effect_name, |item| {
                 if item.item_type != aviutl2::generic::EffectItemType::Number {
                     return;
                 }

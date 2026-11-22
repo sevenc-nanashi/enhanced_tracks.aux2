@@ -394,7 +394,7 @@ fn collect_object_keyframe_bindings(
     for effect in read.get_effects(object_handle)? {
         let effect = read.effect(effect);
         let effect_name = effect.get_name().context("Failed to get effect name")?;
-        crate::EDIT_HANDLE.enumerate_effect_items(&effect_name, |item| {
+        crate::enumerate_effect_items(&effect_name, |item| {
             if item.item_type != aviutl2::generic::EffectItemType::Number {
                 return;
             }
@@ -416,7 +416,7 @@ fn collect_object_keyframe_bindings(
                     object: object_handle,
                     effect: effect.handle,
                     effect_name: effect_name.to_string(),
-                    track_name: item.name,
+                    track_name: item.name.clone(),
                 });
         })?;
     }
